@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+import json
+import os
+import tempfile
+import threading
+import time
+import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.request import Request, urlopen
+
+from apple_fm_audit.server import AuditServer
+from apple_fm_audit.store import Store
+
+
+class Upstream(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        return
+
+    def do_GET(self):
+        origin = self.headers.get("Origin")
+        body = json.dumps({"origin": origin, "path": self.path}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+
+class ProxyTest(unittest.TestCase):
+    def setUp(self):
+        self.up = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
+        self.up_thread = threading.Thread(target=self.up.serve_forever, daemon=True)
+        self.up_thread.start()
+        fd, self.db = tempfile.mkstemp(suffix=".sqlite")
+        os.close(fd)
+        self.store = Store(self.db)
+        up_port = self.up.server_address[1]
+        self.audit = AuditServer(
+            ("127.0.0.1", 0), ("127.0.0.1", up_port), self.store
+        )
+        self.audit_thread = threading.Thread(
+            target=self.audit.serve_forever, daemon=True
+        )
+        self.audit_thread.start()
+        self.base = "http://127.0.0.1:%s" % self.audit.server_address[1]
+        time.sleep(0.05)
+
+    def tearDown(self):
+        self.audit.shutdown()
+        self.audit.server_close()
+        self.up.shutdown()
+        self.up.server_close()
+        self.store.close()
+        os.unlink(self.db)
+
+    def test_strips_origin_and_records_body(self):
+        req = Request(
+            self.base + "/v1/models",
+            headers={"Origin": "https://example.test"},
+        )
+        with urlopen(req, timeout=5) as res:
+            payload = json.loads(res.read().decode())
+        self.assertIsNone(payload["origin"])
+        rows = self.store.list_calls()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["path"], "/v1/models")
+        self.assertEqual(rows[0]["status"], 200)
+
+    def test_post_body_roundtrip(self):
+        data = b'{"model":"system","messages":[{"role":"user","content":"hi"}]}'
+        req = Request(
+            self.base + "/v1/chat/completions",
+            data=data,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urlopen(req, timeout=5) as res:
+            self.assertEqual(res.read(), data)
+        row = self.store.get_call(self.store.list_calls()[0]["id"])
+        self.assertIn("hi", row["req_body"])
+
+    def test_ui_is_not_proxied(self):
+        with urlopen(self.base + "/", timeout=5) as res:
+            html = res.read().decode()
+        self.assertIn("apple-fm-audit", html)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,14 @@
+services:
+  apple-fm-audit:
+    build: .
+    ports:
+      - "1977:1977"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      AFM_LISTEN_HOST: "0.0.0.0"
+      AFM_LISTEN_PORT: "1977"
+      AFM_UPSTREAM: "host.docker.internal:1976"
+      AFM_DB: "/data/audit.sqlite"
+    volumes:
+      - ./data:/data

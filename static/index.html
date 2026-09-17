@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>apple-fm-audit</title>
+  <link rel="icon" href="/favicon.ico" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <p class="mark">apple-fm-audit</p>
+      <p class="lede">On-device Foundation Model traffic, recorded as it happens.</p>
+    </div>
+    <dl class="meta" id="meta">
+      <div><dt>listen</dt><dd id="meta-listen">…</dd></div>
+      <div><dt>upstream</dt><dd id="meta-upstream">…</dd></div>
+    </dl>
+  </header>
+  <main class="bench">
+    <section class="run" aria-label="Call log">
+      <div class="run-bar">
+        <input id="filter" type="search" placeholder="Filter path" autocomplete="off">
+        <button type="button" id="clear">Clear log</button>
+      </div>
+      <ol id="list" class="list"></ol>
+      <p id="empty" class="empty">Point a client at this origin. Calls to the on-device model land here.</p>
+    </section>
+    <section class="plate" id="plate" aria-label="Call detail">
+      <p class="plate-idle" id="idle">Select a call.</p>
+      <article id="detail" hidden>
+        <header class="plate-head">
+          <p id="d-line" class="d-line"></p>
+          <p id="d-sub" class="d-sub"></p>
+        </header>
+        <div class="slabs">
+          <section>
+            <h2>Request</h2>
+            <pre id="d-req"></pre>
+          </section>
+          <section>
+            <h2>Response</h2>
+            <pre id="d-res"></pre>
+          </section>
+        </div>
+      </article>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

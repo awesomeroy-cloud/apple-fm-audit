@@ -1,0 +1,229 @@
+:root {
+  --mill: #d7dce0;
+  --ink: #0f2a32;
+  --oxide: #3d7a8c;
+  --ok: #2f6f62;
+  --fault: #8b3140;
+  --plate: #eef1f3;
+  --line: #b4bcc2;
+  --warn: #8a5a1f;
+  --type: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--mill);
+  color: var(--ink);
+  font-family: var(--type);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+body {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  align-items: flex-end;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.mark {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.lede {
+  margin: 0.35rem 0 0;
+  max-width: 36rem;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.meta {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem 1.25rem;
+  grid-template-columns: auto auto;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.meta dt {
+  color: var(--oxide);
+  font-weight: 500;
+}
+
+.meta dd {
+  margin: 0;
+}
+
+.bench {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(16rem, 38%) 1fr;
+  min-height: 0;
+}
+
+.run {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+}
+
+.run-bar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+input[type="search"], button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.4rem 0.6rem;
+}
+
+input[type="search"] {
+  flex: 1;
+  min-width: 0;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover { border-color: var(--ink); }
+
+button:focus-visible,
+input:focus-visible,
+.row:focus-visible {
+  outline: 2px solid var(--oxide);
+  outline-offset: 2px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  flex: 1;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  gap: 0.6rem;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-left: 4px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 0.7rem 0.9rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.row.is-ok { border-left-color: var(--ok); }
+.row.is-client { border-left-color: var(--warn); }
+.row.is-fault { border-left-color: var(--fault); }
+.row.is-on { background: var(--plate); }
+
+.row .method { font-weight: 500; }
+.row .path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row .ms { color: var(--oxide); }
+
+.empty {
+  margin: 2rem 1.25rem;
+  max-width: 22rem;
+}
+
+.plate {
+  background: var(--plate);
+  min-height: 0;
+  overflow: auto;
+  padding: 1.25rem 1.5rem 2rem;
+}
+
+.plate-idle {
+  margin: 2rem 0;
+  color: var(--oxide);
+}
+
+.d-line {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.d-sub {
+  margin: 0.25rem 0 1rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--oxide);
+}
+
+.slabs {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.slabs h2 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.slabs pre {
+  margin: 0;
+  padding: 0.85rem 0.9rem;
+  background: #f7f8f9;
+  border-left: 4px solid var(--ink);
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 800px) {
+  .top { flex-direction: column; align-items: flex-start; }
+  .bench { grid-template-columns: 1fr; }
+  .run {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    max-height: 42vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
