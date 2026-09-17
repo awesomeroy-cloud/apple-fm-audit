@@ -40,6 +40,17 @@ client.chat.completions.create(
 )
 ```
 
+## Run at login (macOS LaunchAgent)
+
+Installs two user agents: `fm serve` on `127.0.0.1:1976` and apple-fm-audit on `127.0.0.1:1977`. They start at login and restart if they exit.
+
+```bash
+./install-service.sh
+./uninstall-service.sh
+```
+
+Logs: `~/Library/Logs/com.roy.fm-serve.log` and `~/Library/Logs/com.roy.apple-fm-audit.log`.
+
 ## Run with Docker
 
 `fm serve` stays on the host. Compose maps `host.docker.internal:1976` to that process.
