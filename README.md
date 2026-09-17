@@ -12,9 +12,10 @@ Chat Completions bodies are forwarded unchanged. `POST /v1/responses` is transla
 
 ## Run with the script
 
-Needs Python 3.10+ and `fm serve` on the upstream port.
+Needs Python 3.10+, `pip install -r requirements.txt` (official `openai` types for Responses events), and `fm serve` on the upstream port.
 
 ```bash
+pip install -r requirements.txt
 fm serve
 ./run.sh
 ```

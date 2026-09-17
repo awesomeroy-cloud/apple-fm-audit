@@ -13,6 +13,25 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from openai.types.responses.response import Response
+from openai.types.responses.response_completed_event import ResponseCompletedEvent
+from openai.types.responses.response_content_part_added_event import (
+    ResponseContentPartAddedEvent,
+)
+from openai.types.responses.response_content_part_done_event import (
+    ResponseContentPartDoneEvent,
+)
+from openai.types.responses.response_created_event import ResponseCreatedEvent
+from openai.types.responses.response_in_progress_event import ResponseInProgressEvent
+from openai.types.responses.response_output_item_added_event import (
+    ResponseOutputItemAddedEvent,
+)
+from openai.types.responses.response_output_item_done_event import (
+    ResponseOutputItemDoneEvent,
+)
+from openai.types.responses.response_text_delta_event import ResponseTextDeltaEvent
+from openai.types.responses.response_text_done_event import ResponseTextDoneEvent
+
 KEEP = {
     "model",
     "messages",
@@ -207,38 +226,110 @@ def to_chat_request(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _usage_from_chat(usage: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not usage:
+        return None
+    return {
+        "input_tokens": int(usage.get("prompt_tokens") or 0),
+        "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+        "output_tokens": int(usage.get("completion_tokens") or 0),
+        "output_tokens_details": {"reasoning_tokens": 0},
+        "total_tokens": int(usage.get("total_tokens") or 0),
+    }
+
+
 def chat_to_response(chat: dict[str, Any]) -> dict[str, Any]:
     choices = chat.get("choices") or []
     message = (choices[0].get("message") if choices else {}) or {}
     text = message.get("content") or ""
-    usage = chat.get("usage") or {}
     cid = str(chat.get("id") or "chatcmpl-local")
-    rid = cid.replace("chatcmpl-", "resp_", 1)
-    mid = cid.replace("chatcmpl-", "msg_", 1)
-    return {
-        "id": rid,
-        "object": "response",
-        "created_at": chat.get("created"),
-        "status": "completed",
+    acc = {
+        "id": cid,
+        "created": int(chat.get("created") or 0),
         "model": chat.get("model") or "system",
-        "output": [
+        "text": text,
+        "usage": chat.get("usage") or {},
+    }
+    return _openai_response(acc, status="completed", include_output=True)
+
+
+def _ids(acc: dict[str, Any]) -> tuple[str, str]:
+    cid = str(acc.get("id") or "chatcmpl-local")
+    acc["id"] = cid
+    rid = acc.setdefault("resp_id", cid.replace("chatcmpl-", "resp_", 1))
+    mid = acc.setdefault("item_id", cid.replace("chatcmpl-", "msg_", 1))
+    return str(rid), str(mid)
+
+
+def _seq(acc: dict[str, Any]) -> int:
+    n = int(acc.get("seq") or 0) + 1
+    acc["seq"] = n
+    return n
+
+
+def _openai_response(
+    acc: dict[str, Any], *, status: str, include_output: bool
+) -> dict[str, Any]:
+    rid, mid = _ids(acc)
+    text = acc.get("text") or ""
+    output: list[dict[str, Any]] = []
+    if include_output:
+        output = [
             {
                 "id": mid,
                 "type": "message",
-                "status": "completed",
+                "status": "completed" if status == "completed" else "in_progress",
                 "role": "assistant",
                 "content": [
                     {"type": "output_text", "text": text, "annotations": []}
                 ],
             }
-        ],
-        "usage": {
-            "input_tokens": usage.get("prompt_tokens") or 0,
-            "output_tokens": usage.get("completion_tokens") or 0,
-            "total_tokens": usage.get("total_tokens") or 0,
-            "input_tokens_details": {"cached_tokens": 0},
-            "output_tokens_details": {"reasoning_tokens": 0},
-        },
+        ]
+    payload = {
+        "id": rid,
+        "object": "response",
+        "created_at": int(acc.get("created") or 0),
+        "status": status,
+        "error": None,
+        "incomplete_details": None,
+        "instructions": None,
+        "max_output_tokens": None,
+        "model": acc.get("model") or "system",
+        "output": output,
+        "parallel_tool_calls": True,
+        "previous_response_id": None,
+        "temperature": 1.0,
+        "tool_choice": "auto",
+        "tools": [],
+        "top_p": 1.0,
+        "truncation": "disabled",
+        "usage": _usage_from_chat(acc.get("usage")) if status == "completed" else None,
+        "metadata": {},
+        "store": False,
+    }
+    return Response.model_validate(payload).model_dump(mode="json")
+
+
+def _sse(event: Any) -> str:
+    data = event.model_dump(mode="json")
+    return f"event: {data['type']}\ndata: {json.dumps(data)}\n\n"
+
+
+def _text_part(text: str) -> dict[str, Any]:
+    return {"type": "output_text", "text": text, "annotations": []}
+
+
+def _message_item(
+    acc: dict[str, Any], *, status: str, text: str | None = None
+) -> dict[str, Any]:
+    _, mid = _ids(acc)
+    content = [] if text is None else [_text_part(text)]
+    return {
+        "id": mid,
+        "type": "message",
+        "status": status,
+        "role": "assistant",
+        "content": content,
     }
 
 
@@ -263,35 +354,80 @@ def rewrite_upstream(path: str, body: bytes) -> tuple[str, bytes, bool]:
     return "/v1/chat/completions", out, True
 
 
+def _finish_frames(acc: dict[str, Any]) -> list[str]:
+    if acc.get("completed"):
+        return []
+    acc["completed"] = True
+    _, mid = _ids(acc)
+    text = acc.get("text") or ""
+    part = _text_part(text)
+    item = _message_item(acc, status="completed", text=text)
+    snapshot = _openai_response(acc, status="completed", include_output=True)
+    frames = []
+    if acc.get("started"):
+        frames.extend(
+            [
+                _sse(
+                    ResponseTextDoneEvent.model_validate(
+                        {
+                            "type": "response.output_text.done",
+                            "content_index": 0,
+                            "item_id": mid,
+                            "logprobs": [],
+                            "output_index": 0,
+                            "sequence_number": _seq(acc),
+                            "text": text,
+                        }
+                    )
+                ),
+                _sse(
+                    ResponseContentPartDoneEvent.model_validate(
+                        {
+                            "type": "response.content_part.done",
+                            "content_index": 0,
+                            "item_id": mid,
+                            "output_index": 0,
+                            "part": part,
+                            "sequence_number": _seq(acc),
+                        }
+                    )
+                ),
+                _sse(
+                    ResponseOutputItemDoneEvent.model_validate(
+                        {
+                            "type": "response.output_item.done",
+                            "item": item,
+                            "output_index": 0,
+                            "sequence_number": _seq(acc),
+                        }
+                    )
+                ),
+            ]
+        )
+    frames.append(
+        _sse(
+            ResponseCompletedEvent.model_validate(
+                {
+                    "type": "response.completed",
+                    "sequence_number": _seq(acc),
+                    "response": snapshot,
+                }
+            )
+        )
+    )
+    return frames
+
+
 def chat_sse_line_to_response_frames(
     line: str, acc: dict[str, Any]
 ) -> list[str]:
-    """Turn one Chat Completions SSE line into Responses API SSE frames."""
+    """Chat Completions SSE -> official OpenAI Responses streaming events."""
     raw = line.strip()
     if not raw.startswith("data:"):
         return []
     payload = raw[5:].strip()
     if payload == "[DONE]":
-        if acc.get("completed"):
-            return []
-        acc["completed"] = True
-        body = chat_to_response(
-            {
-                "id": acc.get("id") or "chatcmpl-local",
-                "created": acc.get("created") or 0,
-                "model": acc.get("model") or "system",
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": acc.get("text") or "",
-                        }
-                    }
-                ],
-                "usage": acc.get("usage") or {},
-            }
-        )
-        return [f"event: response.completed\ndata: {json.dumps(body)}\n\n"]
+        return _finish_frames(acc)
     try:
         obj = json.loads(payload)
     except ValueError:
@@ -300,61 +436,82 @@ def chat_sse_line_to_response_frames(
         return []
     if obj.get("id"):
         acc["id"] = obj["id"]
-    if obj.get("created"):
-        acc["created"] = obj["created"]
+    if obj.get("created") is not None:
+        acc["created"] = int(obj["created"])
     if obj.get("model"):
         acc["model"] = obj["model"]
     if obj.get("usage"):
         acc["usage"] = obj["usage"]
     frames: list[str] = []
+    rid, mid = _ids(acc)
     if not acc.get("started"):
         acc["started"] = True
-        created = {
-            "type": "response.created",
-            "response": {
-                "id": str(acc.get("id") or "resp_local").replace(
-                    "chatcmpl-", "resp_", 1
+        empty = _openai_response(acc, status="in_progress", include_output=False)
+        frames.extend(
+            [
+                _sse(
+                    ResponseCreatedEvent.model_validate(
+                        {
+                            "type": "response.created",
+                            "sequence_number": _seq(acc),
+                            "response": empty,
+                        }
+                    )
                 ),
-                "object": "response",
-                "status": "in_progress",
-                "model": acc.get("model") or "system",
-            },
-        }
-        frames.append(
-            f"event: response.created\ndata: {json.dumps(created)}\n\n"
+                _sse(
+                    ResponseInProgressEvent.model_validate(
+                        {
+                            "type": "response.in_progress",
+                            "sequence_number": _seq(acc),
+                            "response": empty,
+                        }
+                    )
+                ),
+                _sse(
+                    ResponseOutputItemAddedEvent.model_validate(
+                        {
+                            "type": "response.output_item.added",
+                            "item": _message_item(acc, status="in_progress"),
+                            "output_index": 0,
+                            "sequence_number": _seq(acc),
+                        }
+                    )
+                ),
+                _sse(
+                    ResponseContentPartAddedEvent.model_validate(
+                        {
+                            "type": "response.content_part.added",
+                            "content_index": 0,
+                            "item_id": mid,
+                            "output_index": 0,
+                            "part": _text_part(""),
+                            "sequence_number": _seq(acc),
+                        }
+                    )
+                ),
+            ]
         )
     choices = obj.get("choices") or []
     delta = (choices[0].get("delta") if choices else {}) or {}
     piece = delta.get("content")
     if isinstance(piece, str) and piece:
         acc["text"] = (acc.get("text") or "") + piece
-        event = {
-            "type": "response.output_text.delta",
-            "delta": piece,
-        }
         frames.append(
-            f"event: response.output_text.delta\ndata: {json.dumps(event)}\n\n"
+            _sse(
+                ResponseTextDeltaEvent.model_validate(
+                    {
+                        "type": "response.output_text.delta",
+                        "content_index": 0,
+                        "delta": piece,
+                        "item_id": mid,
+                        "logprobs": [],
+                        "output_index": 0,
+                        "sequence_number": _seq(acc),
+                    }
+                )
+            )
         )
     finish = choices[0].get("finish_reason") if choices else None
-    if finish and not acc.get("completed"):
-        acc["completed"] = True
-        body = chat_to_response(
-            {
-                "id": acc.get("id") or "chatcmpl-local",
-                "created": acc.get("created") or 0,
-                "model": acc.get("model") or "system",
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": acc.get("text") or "",
-                        }
-                    }
-                ],
-                "usage": acc.get("usage") or {},
-            }
-        )
-        frames.append(
-            f"event: response.completed\ndata: {json.dumps(body)}\n\n"
-        )
+    if finish:
+        frames.extend(_finish_frames(acc))
     return frames
