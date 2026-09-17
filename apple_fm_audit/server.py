@@ -17,6 +17,7 @@ from apple_fm_audit.convert import (
     rewrite_upstream,
 )
 from apple_fm_audit.headers import is_local_path, upstream_headers
+from apple_fm_audit.license_check import inspect_license
 from apple_fm_audit.store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -100,6 +101,9 @@ class AuditHandler(BaseHTTPRequestHandler):
             return
         if self.command == "GET" and path == "/_audit/meta":
             self._json(200, self.server.meta)  # type: ignore[attr-defined]
+            return
+        if self.command == "GET" and path == "/_audit/license":
+            self._json(200, inspect_license())
             return
         if self.command == "GET" and path == "/_audit/calls":
             q = parse_qs(parsed.query)
@@ -347,14 +351,27 @@ def main() -> int:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     store = Store(db_path)
     httpd = AuditServer((listen_host, listen_port), upstream, store)
+    gate = inspect_license()
     print(
         "apple-fm-audit\n"
         f"  ui       http://{listen_host}:{listen_port}\n"
         f"  upstream http://{upstream[0]}:{upstream[1]}\n"
         f"  sqlite   {db_path}\n"
+        f"  fm       {gate['status'] or gate['fm']}\n"
         "  clients  point OpenAI base URL at this origin",
         flush=True,
     )
+    if not gate["agreed"]:
+        print(
+            "\nApple Foundation Models CLI terms are not agreed on this Mac.\n"
+            "This process will not type yes for you.\n"
+            f"  {gate['command']}\n"
+            "Read the notice, type yes, then run: fm serve\n",
+            flush=True,
+        )
+        if gate["text"]:
+            print(gate["text"], flush=True)
+            print("", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

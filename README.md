@@ -12,13 +12,15 @@ Chat Completions bodies are forwarded unchanged. `POST /v1/responses` is transla
 
 ## Run with the script
 
-Needs Python 3.10+, `pip install -r requirements.txt` (official `openai` types for Responses events), and `fm serve` on the upstream port.
+Needs [uv](https://docs.astral.sh/uv/), Python 3.10+ (uv installs it), and `fm serve` on the upstream port. First use of `fm` on a Mac requires agreeing to Apple's terms yourself:
 
 ```bash
-pip install -r requirements.txt
+sudo fm license
 fm serve
 ./run.sh
 ```
+
+`./run.sh` runs `uv sync` and `fm license --status`. It does not type `yes` for you. If terms are not agreed, it prints the notice, still starts the UI, and the page shows the same text until you finish `sudo fm license`.
 
 Open [http://127.0.0.1:1977](http://127.0.0.1:1977). Point the client at the same origin:
 
@@ -55,6 +57,7 @@ docker compose up --build
 | `AFM_LISTEN_PORT` | `1977` | Port for UI and proxy |
 | `AFM_UPSTREAM` | `127.0.0.1:1976` | `fm serve` (or any HTTP origin) |
 | `AFM_DB` | `data/audit.sqlite` | SQLite file |
+| `AFM_FM_BIN` | `fm` | Path to the `fm` binary for the license check |
 
 ## Local routes (not proxied)
 
@@ -63,13 +66,15 @@ docker compose up --build
 - `GET /_audit/calls/:id` one call
 - `DELETE /_audit/calls` wipe the log
 - `GET /_audit/meta` listen/upstream
+- `GET /_audit/license` `fm license --status` / `--show` (never auto-agrees)
 
 Everything else, including `/v1/chat/completions` and `/health`, goes upstream.
 
 ## Tests
 
 ```bash
-PYTHONPATH=. python3 -m unittest discover -s tests -v
+uv sync --frozen
+PYTHONPATH=. uv run python -m unittest discover -s tests -v
 ```
 
 ## License

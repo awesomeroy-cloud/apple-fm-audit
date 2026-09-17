@@ -66,6 +66,20 @@ async function loadMeta() {
   document.getElementById("meta-upstream").textContent = meta.upstream;
 }
 
+async function loadLicense() {
+  const box = document.getElementById("license");
+  const pre = document.getElementById("license-text");
+  const res = await fetch("/_audit/license");
+  if (!res.ok) return;
+  const info = await res.json();
+  if (info.agreed) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  pre.textContent = info.text || info.status || "";
+}
+
 async function loadList() {
   const q = filterEl.value.trim();
   const url = q ? `/_audit/calls?q=${encodeURIComponent(q)}` : "/_audit/calls";
@@ -129,8 +143,10 @@ filterEl.addEventListener("input", () => {
 });
 
 loadMeta();
+loadLicense();
 loadList();
 timer = setInterval(loadList, 1500);
+setInterval(loadLicense, 4000);
 if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
   clearInterval(timer);
 }
