@@ -18,6 +18,19 @@ function fmtTime(ts) {
   return d.toLocaleString();
 }
 
+function fmtListTime(ts) {
+  const d = new Date(Number(ts) * 1000);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
 function pretty(text) {
   if (!text) return "";
   try {
@@ -77,7 +90,10 @@ async function loadList() {
     const ms = document.createElement("span");
     ms.className = "ms";
     ms.textContent = `${call.status ?? "—"}  ${call.duration_ms ?? "—"}ms`;
-    btn.append(method, path, ms);
+    const when = document.createElement("span");
+    when.className = "when";
+    when.textContent = fmtListTime(call.ts);
+    btn.append(method, path, ms, when);
     btn.addEventListener("click", () => openCall(call.id));
     li.appendChild(btn);
     listEl.appendChild(li);
