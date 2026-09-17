@@ -25,9 +25,38 @@ class Upstream(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    last_path = ""
+    last_body = b""
+
     def do_POST(self):
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n)
+        Upstream.last_path = self.path
+        Upstream.last_body = raw
+        if self.path.startswith("/v1/chat/completions"):
+            raw = json.dumps(
+                {
+                    "id": "chatcmpl-1",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": "system",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": "OK",
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 1,
+                        "completion_tokens": 1,
+                        "total_tokens": 2,
+                    },
+                }
+            ).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(raw)))
@@ -84,7 +113,8 @@ class ProxyTest(unittest.TestCase):
             headers={"Content-Type": "application/json"},
         )
         with urlopen(req, timeout=5) as res:
-            self.assertEqual(res.read(), data)
+            payload = json.loads(res.read().decode())
+        self.assertEqual(payload["choices"][0]["message"]["content"], "OK")
         row = self.store.get_call(self.store.list_calls()[0]["id"])
         self.assertIn("hi", row["req_body"])
 
@@ -92,6 +122,40 @@ class ProxyTest(unittest.TestCase):
         with urlopen(self.base + "/", timeout=5) as res:
             html = res.read().decode()
         self.assertIn("apple-fm-audit", html)
+
+    def test_responses_translates_to_chat_completions(self):
+        payload = json.dumps(
+            {
+                "model": "system",
+                "input": [
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "Say OK"}],
+                    }
+                ],
+                "stream": False,
+            }
+        ).encode()
+        req = Request(
+            self.base + "/v1/responses",
+            data=payload,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "https://example.test",
+            },
+        )
+        with urlopen(req, timeout=5) as res:
+            body = json.loads(res.read().decode())
+        self.assertEqual(body["object"], "response")
+        self.assertEqual(body["output"][0]["content"][0]["text"], "OK")
+        self.assertEqual(Upstream.last_path, "/v1/chat/completions")
+        forwarded = json.loads(Upstream.last_body.decode())
+        self.assertEqual(forwarded["messages"][-1]["content"], "Say OK")
+        row = self.store.get_call(self.store.list_calls()[0]["id"])
+        self.assertEqual(row["path"], "/v1/responses")
+        self.assertIn("input_text", row["req_body"])
 
 
 if __name__ == "__main__":

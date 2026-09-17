@@ -11,6 +11,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from apple_fm_audit.convert import (
+    chat_sse_line_to_response_frames,
+    chat_to_response,
+    rewrite_upstream,
+)
 from apple_fm_audit.headers import is_local_path, upstream_headers
 from apple_fm_audit.store import Store
 
@@ -29,6 +34,21 @@ class AuditHandler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args) -> None:
         sys.stderr.write("%s · %s\n" % (self.log_date_time_string(), fmt % args))
+
+    def _cors(self) -> None:
+        origin = self.headers.get("Origin") or "*"
+        requested = self.headers.get("Access-Control-Request-Headers")
+        self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header(
+            "Access-Control-Allow-Methods",
+            "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        )
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            requested or "Authorization, Content-Type, OpenAI-Beta",
+        )
+        self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Vary", "Origin")
 
     def do_GET(self) -> None:
         self._dispatch()
@@ -52,6 +72,12 @@ class AuditHandler(BaseHTTPRequestHandler):
         self._dispatch()
 
     def _dispatch(self) -> None:
+        if self.command == "OPTIONS":
+            self.send_response(204)
+            self._cors()
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         parsed = urlsplit(self.path)
         if is_local_path(parsed.path):
             self._local(parsed)
@@ -106,6 +132,7 @@ class AuditHandler(BaseHTTPRequestHandler):
             return
         data = path.read_bytes()
         self.send_response(200)
+        self._cors()
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
@@ -116,6 +143,7 @@ class AuditHandler(BaseHTTPRequestHandler):
     def _json(self, status: int, payload: dict) -> None:
         data = json.dumps(payload, default=str).encode("utf-8")
         self.send_response(status)
+        self._cors()
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
@@ -130,9 +158,11 @@ class AuditHandler(BaseHTTPRequestHandler):
             return
         req_body = self.rfile.read(length) if length else b""
         req_headers = {k: v for k, v in self.headers.items()}
+        fwd_path, fwd_body, as_responses = rewrite_upstream(parsed.path, req_body)
         fwd = upstream_headers(req_headers)
-        if req_body:
-            fwd["Content-Length"] = str(len(req_body))
+        if fwd_body:
+            fwd["Content-Type"] = "application/json"
+            fwd["Content-Length"] = str(len(fwd_body))
         else:
             fwd.pop("Content-Length", None)
 
@@ -146,41 +176,101 @@ class AuditHandler(BaseHTTPRequestHandler):
         try:
             conn.request(
                 self.command,
-                parsed.path + (("?" + parsed.query) if parsed.query else ""),
-                body=req_body or None,
+                fwd_path + (("?" + parsed.query) if parsed.query else ""),
+                body=fwd_body or None,
                 headers=fwd,
             )
             resp = conn.getresponse()
             status = resp.status
             res_headers = {k: v for k, v in resp.getheaders()}
             self.send_response(resp.status, resp.reason)
+            self._cors()
             hop = {
                 "connection",
                 "keep-alive",
                 "transfer-encoding",
                 "content-length",
+                "access-control-allow-origin",
+                "access-control-allow-methods",
+                "access-control-allow-headers",
             }
             ctype = (resp.getheader("Content-Type") or "").lower()
             streaming = "text/event-stream" in ctype
             for k, v in resp.getheaders():
                 if k.lower() in hop:
                     continue
+                if as_responses and streaming and k.lower() == "content-type":
+                    continue
                 self.send_header(k, v)
             chunks: list[bytes] = []
             if streaming:
+                if as_responses:
+                    self.send_header(
+                        "Content-Type", "text/event-stream; charset=utf-8"
+                    )
                 self.send_header("Cache-Control", "no-cache")
                 self.send_header("Connection", "close")
                 self.end_headers()
-                while True:
-                    chunk = resp.read(8192)
-                    if not chunk:
-                        break
-                    chunks.append(chunk)
+                if as_responses:
+                    acc: dict = {}
+                    buf = b""
+                    while True:
+                        chunk = resp.read(8192)
+                        if not chunk:
+                            break
+                        buf += chunk
+                        while b"\n" in buf:
+                            line, buf = buf.split(b"\n", 1)
+                            frames = chat_sse_line_to_response_frames(
+                                line.decode("utf-8", "replace") + "\n", acc
+                            )
+                            for frame in frames:
+                                encoded = frame.encode("utf-8")
+                                chunks.append(encoded)
+                                if self.command != "HEAD":
+                                    self.wfile.write(encoded)
+                                    self.wfile.flush()
+                    if buf.strip():
+                        for frame in chat_sse_line_to_response_frames(
+                            buf.decode("utf-8", "replace"), acc
+                        ):
+                            encoded = frame.encode("utf-8")
+                            chunks.append(encoded)
+                            if self.command != "HEAD":
+                                self.wfile.write(encoded)
+                    if not acc.get("completed"):
+                        for frame in chat_sse_line_to_response_frames(
+                            "data: [DONE]\n", acc
+                        ):
+                            encoded = frame.encode("utf-8")
+                            chunks.append(encoded)
+                            if self.command != "HEAD":
+                                self.wfile.write(encoded)
                     if self.command != "HEAD":
-                        self.wfile.write(chunk)
                         self.wfile.flush()
+                else:
+                    while True:
+                        chunk = resp.read(8192)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        if self.command != "HEAD":
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
             else:
                 data = resp.read()
+                if as_responses and resp.status == 200:
+                    try:
+                        chat = json.loads(data.decode("utf-8"))
+                        if (
+                            isinstance(chat, dict)
+                            and chat.get("object") == "chat.completion"
+                        ):
+                            data = json.dumps(chat_to_response(chat)).encode(
+                                "utf-8"
+                            )
+                    except (ValueError, UnicodeDecodeError):
+                        pass
                 chunks.append(data)
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()

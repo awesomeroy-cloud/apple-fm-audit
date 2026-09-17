@@ -8,7 +8,7 @@ This project is not affiliated with Apple.
 
 Clients talk to **apple-fm-audit**. The process forwards each call to `fm serve` (or another OpenAI-compatible origin), writes a row to SQLite, and serves an audit UI at `/`.
 
-Bodies are forwarded unchanged. `Origin`, `Referer`, and `Sec-Fetch-*` are dropped so a browser can call `fm serve` without CSRF 403.
+Chat Completions bodies are forwarded unchanged. `POST /v1/responses` is translated to `POST /v1/chat/completions` because `fm serve` has no Responses API. `Origin`, `Referer`, and `Sec-Fetch-*` are dropped so a browser can call `fm serve` without CSRF 403.
 
 ## Run with the script
 
@@ -20,6 +20,13 @@ fm serve
 ```
 
 Open [http://127.0.0.1:1977](http://127.0.0.1:1977). Point the client at the same origin:
+
+API provider fields:
+
+- Base URL: `http://127.0.0.1:1977/v1`
+- API key: any non-empty string
+- Model: `system`
+- Wire API: Chat Completions or Responses (both work)
 
 ```python
 from openai import OpenAI
