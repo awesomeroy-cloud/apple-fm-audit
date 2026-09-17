@@ -130,11 +130,8 @@ input:focus-visible,
 
 .row {
   display: grid;
-  grid-template-columns: 4.5rem 1fr auto;
-  grid-template-areas:
-    "method path ms"
-    "when when when";
-  gap: 0.15rem 0.6rem;
+  grid-template-columns: 10rem 4.5rem minmax(0, 1fr) auto;
+  gap: 0.6rem;
   align-items: baseline;
   width: 100%;
   text-align: left;
@@ -154,19 +151,18 @@ input:focus-visible,
 .row.is-fault { border-left-color: var(--fault); }
 .row.is-on { background: var(--plate); }
 
-.row .method { grid-area: method; font-weight: 500; }
+.row .when {
+  color: var(--oxide);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.row .method { font-weight: 500; }
 .row .path {
-  grid-area: path;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.row .ms { grid-area: ms; color: var(--oxide); }
-.row .when {
-  grid-area: when;
-  color: var(--oxide);
-  font-size: 0.7rem;
-}
+.row .ms { color: var(--oxide); white-space: nowrap; }
 
 .empty {
   margin: 2rem 1.25rem;

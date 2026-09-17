@@ -93,7 +93,7 @@ async function loadList() {
     const when = document.createElement("span");
     when.className = "when";
     when.textContent = fmtListTime(call.ts);
-    btn.append(method, path, ms, when);
+    btn.append(when, method, path, ms);
     btn.addEventListener("click", () => openCall(call.id));
     li.appendChild(btn);
     listEl.appendChild(li);
