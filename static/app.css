@@ -165,7 +165,7 @@ input:focus-visible,
 
 .row {
   display: grid;
-  grid-template-columns: 10rem 4.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 10rem 4.5rem minmax(0, 1fr) 5.5rem 6.5rem auto;
   gap: 0.6rem;
   align-items: baseline;
   width: 100%;
@@ -198,6 +198,14 @@ input:focus-visible,
   white-space: nowrap;
 }
 .row .ms { color: var(--oxide); white-space: nowrap; }
+.row .tok { color: var(--oxide); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row .tag {
+  white-space: nowrap;
+  font-weight: 500;
+}
+.row .tag.is-ok { color: var(--ok); }
+.row .tag.is-warn { color: var(--warn); }
+.row .tag.is-fault { color: var(--fault); }
 
 .empty {
   margin: 2rem 1.25rem;

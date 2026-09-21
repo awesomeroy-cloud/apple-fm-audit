@@ -8,6 +8,8 @@ import threading
 import time
 from typing import Any
 
+from apple_fm_audit.annotate import annotate_row
+
 
 def _decode(body: bytes) -> str:
     if not body:
@@ -90,7 +92,7 @@ class Store:
         self, path_contains: str | None = None, limit: int = 200
     ) -> list[dict[str, Any]]:
         sql = (
-            "SELECT id, ts, method, path, query, status, duration_ms, error "
+            "SELECT id, ts, method, path, query, status, duration_ms, error, res_body "
             "FROM calls"
         )
         args: list[Any] = []
@@ -101,14 +103,29 @@ class Store:
         args.append(limit)
         with self._lock:
             rows = self.conn.execute(sql, args).fetchall()
-        return [dict(r) for r in rows]
+        return [annotate_row(dict(r)) for r in rows]
 
     def get_call(self, call_id: int) -> dict[str, Any] | None:
         with self._lock:
             row = self.conn.execute(
                 "SELECT * FROM calls WHERE id = ?", (call_id,)
             ).fetchone()
-        return dict(row) if row else None
+        if row is None:
+            return None
+        data = dict(row)
+        extra = annotate_row(
+            {
+                "status": data.get("status"),
+                "error": data.get("error"),
+                "res_body": data.get("res_body"),
+            }
+        )
+        data["prompt_tokens"] = extra["prompt_tokens"]
+        data["completion_tokens"] = extra["completion_tokens"]
+        data["total_tokens"] = extra["total_tokens"]
+        data["issue"] = extra["issue"]
+        data["issue_label"] = extra["issue_label"]
+        return data
 
     def clear(self) -> None:
         with self._lock:

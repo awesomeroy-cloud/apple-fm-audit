@@ -78,6 +78,7 @@ docker compose up --build
 - `DELETE /_audit/calls` wipe the log
 - `GET /_audit/meta` listen/upstream
 - `GET /_audit/license` `fm license --status` / `--show` (never auto-agrees)
+- `GET /_audit/status` license plus `GET /health` model availability
 
 Everything else, including `/v1/chat/completions` and `/health`, goes upstream.
 

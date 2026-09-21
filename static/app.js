@@ -6,6 +6,7 @@ const idleEl = document.getElementById("idle");
 const detailEl = document.getElementById("detail");
 const dLine = document.getElementById("d-line");
 const dSub = document.getElementById("d-sub");
+const dUsage = document.getElementById("d-usage");
 const dReq = document.getElementById("d-req");
 const dRes = document.getElementById("d-res");
 
@@ -58,26 +59,59 @@ function statusClass(status) {
   return "";
 }
 
-async function loadMeta() {
-  const res = await fetch("/_audit/meta");
-  if (!res.ok) return;
-  const meta = await res.json();
-  document.getElementById("meta-listen").textContent = meta.listen;
-  document.getElementById("meta-upstream").textContent = meta.upstream;
+function issueClass(issue) {
+  if (issue === "ok") return "is-ok";
+  if (issue === "guardrail" || issue === "context" || issue === "csrf" || issue === "invalid") {
+    return "is-warn";
+  }
+  return "is-fault";
 }
 
-async function loadLicense() {
-  const box = document.getElementById("license");
-  const pre = document.getElementById("license-text");
-  const res = await fetch("/_audit/license");
+function tokText(call) {
+  if (call.total_tokens == null) return "—";
+  const p = call.prompt_tokens ?? "—";
+  const c = call.completion_tokens ?? "—";
+  return `${p}+${c}  ${call.total_tokens}`;
+}
+
+async function loadStatus() {
+  const res = await fetch("/_audit/status");
   if (!res.ok) return;
   const info = await res.json();
-  if (info.agreed) {
-    box.hidden = true;
-    return;
+  document.getElementById("meta-listen").textContent = info.listen;
+  document.getElementById("meta-upstream").textContent = info.upstream;
+  const license = info.license || {};
+  document.getElementById("meta-license").textContent = license.agreed
+    ? "agreed"
+    : "not agreed";
+  const model = info.model || {};
+  if (!model.reachable) {
+    document.getElementById("meta-model").textContent = "upstream down";
+  } else if (model.available) {
+    document.getElementById("meta-model").textContent = `${model.name || "system"} available`;
+  } else {
+    document.getElementById("meta-model").textContent = model.reason || "unavailable";
   }
-  box.hidden = false;
-  pre.textContent = info.text || info.status || "";
+  const box = document.getElementById("license");
+  const pre = document.getElementById("license-text");
+  if (license.agreed) {
+    box.hidden = true;
+  } else {
+    box.hidden = false;
+    pre.textContent = license.text || license.status || "";
+  }
+  const gate = document.getElementById("model-gate");
+  const reason = document.getElementById("model-gate-reason");
+  if (model.reachable && model.available) {
+    gate.hidden = true;
+  } else {
+    gate.hidden = false;
+    if (!model.reachable) {
+      reason.textContent = `fm serve is not reachable at ${info.upstream}. ${model.reason || ""}`.trim();
+    } else {
+      reason.textContent = model.reason || "fm available returned unavailable.";
+    }
+  }
 }
 
 async function loadList() {
@@ -107,7 +141,13 @@ async function loadList() {
     const when = document.createElement("span");
     when.className = "when";
     when.textContent = fmtListTime(call.ts);
-    btn.append(when, method, path, ms);
+    const tag = document.createElement("span");
+    tag.className = `tag ${issueClass(call.issue)}`;
+    tag.textContent = call.issue && call.issue !== "ok" ? call.issue : "";
+    const tok = document.createElement("span");
+    tok.className = "tok";
+    tok.textContent = tokText(call);
+    btn.append(when, method, path, tag, tok, ms);
     btn.addEventListener("click", () => openCall(call.id));
     li.appendChild(btn);
     listEl.appendChild(li);
@@ -122,7 +162,10 @@ async function openCall(id) {
   idleEl.hidden = true;
   detailEl.hidden = false;
   dLine.textContent = `${call.method} ${call.path}`;
-  dSub.textContent = `${fmtTime(call.ts)}  status ${call.status ?? "none"}  ${call.duration_ms ?? "—"} ms${call.error ? "  " + call.error : ""}`;
+  dSub.textContent = `${fmtTime(call.ts)}  status ${call.status ?? "none"}  ${call.duration_ms ?? "—"} ms  ${call.issue && call.issue !== "ok" ? call.issue : ""}${call.error ? "  " + call.error : ""}`;
+  dUsage.textContent = call.total_tokens == null
+    ? "tokens  —"
+    : `tokens  prompt ${call.prompt_tokens}  completion ${call.completion_tokens}  total ${call.total_tokens}`;
   const reqHead = headersBlock(call.req_headers);
   const resHead = headersBlock(call.res_headers);
   dReq.textContent = [reqHead, pretty(call.req_body)].filter(Boolean).join("\n\n");
@@ -142,11 +185,10 @@ filterEl.addEventListener("input", () => {
   loadList();
 });
 
-loadMeta();
-loadLicense();
+loadStatus();
 loadList();
 timer = setInterval(loadList, 1500);
-setInterval(loadLicense, 4000);
+setInterval(loadStatus, 4000);
 if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
   clearInterval(timer);
 }

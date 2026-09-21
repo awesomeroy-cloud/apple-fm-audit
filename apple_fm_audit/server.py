@@ -17,6 +17,7 @@ from apple_fm_audit.convert import (
     rewrite_upstream,
 )
 from apple_fm_audit.headers import is_local_path, upstream_headers
+from apple_fm_audit.annotate import inspect_upstream
 from apple_fm_audit.license_check import inspect_license
 from apple_fm_audit.store import Store
 
@@ -104,6 +105,24 @@ class AuditHandler(BaseHTTPRequestHandler):
             return
         if self.command == "GET" and path == "/_audit/license":
             self._json(200, inspect_license())
+            return
+        if self.command == "GET" and path == "/_audit/status":
+            host, port = self.server.upstream  # type: ignore[attr-defined]
+            license_info = inspect_license()
+            self._json(
+                200,
+                {
+                    "listen": self.server.meta["listen"],  # type: ignore[attr-defined]
+                    "upstream": self.server.meta["upstream"],  # type: ignore[attr-defined]
+                    "license": {
+                        "agreed": license_info["agreed"],
+                        "status": license_info["status"],
+                        "text": license_info["text"],
+                        "command": license_info["command"],
+                    },
+                    "model": inspect_upstream(host, port),
+                },
+            )
             return
         if self.command == "GET" and path == "/_audit/calls":
             q = parse_qs(parsed.query)

@@ -36,6 +36,24 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(rows[0]["path"], "/v1/chat/completions")
         self.assertEqual(rows[0]["status"], 200)
 
+    def test_list_annotates_usage_and_issue(self):
+        self.store.insert(
+            method="POST",
+            path="/v1/chat/completions",
+            query="",
+            status=400,
+            duration_ms=4,
+            req_headers={},
+            req_body=b"{}",
+            res_headers={},
+            res_body=b'{"error":{"message":"ExceededContextWindowSizeError"},"usage":{"prompt_tokens":9000,"completion_tokens":0,"total_tokens":9000}}',
+            error=None,
+        )
+        row = self.store.list_calls()[0]
+        self.assertEqual(row["issue"], "context")
+        self.assertEqual(row["prompt_tokens"], 9000)
+        self.assertNotIn("res_body", row)
+
     def test_get_includes_bodies(self):
         call_id = self.store.insert(
             method="GET",
