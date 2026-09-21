@@ -312,7 +312,7 @@ def _openai_response(
 
 def _sse(event: Any) -> str:
     data = event.model_dump(mode="json")
-    return f"event: {data['type']}\ndata: {json.dumps(data)}\n\n"
+    return f"event: {data['type']}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _text_part(text: str) -> dict[str, Any]:
@@ -350,7 +350,7 @@ def rewrite_upstream(path: str, body: bytes) -> tuple[str, bytes, bool]:
         except (ValueError, UnicodeDecodeError):
             return "/v1/chat/completions", body, True
         payload = loaded if isinstance(loaded, dict) else {}
-    out = json.dumps(to_chat_request(payload)).encode("utf-8")
+    out = json.dumps(to_chat_request(payload), ensure_ascii=False).encode("utf-8")
     return "/v1/chat/completions", out, True
 
 

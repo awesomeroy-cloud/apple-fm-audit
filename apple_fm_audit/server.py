@@ -170,8 +170,8 @@ class AuditHandler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(data)
 
-    def _json(self, status: int, payload: dict) -> None:
-        data = json.dumps(payload, default=str).encode("utf-8")
+    def _json(self, status: int, payload: Any) -> None:
+        data = json.dumps(payload, default=str, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self._cors()
         self.send_header("Content-Type", "application/json")
@@ -351,9 +351,9 @@ class AuditHandler(BaseHTTPRequestHandler):
                             isinstance(chat, dict)
                             and chat.get("object") == "chat.completion"
                         ):
-                            data = json.dumps(chat_to_response(chat)).encode(
-                                "utf-8"
-                            )
+                            data = json.dumps(
+                                chat_to_response(chat), ensure_ascii=False
+                            ).encode("utf-8")
                     except (ValueError, UnicodeDecodeError):
                         pass
                 chunks.append(data)

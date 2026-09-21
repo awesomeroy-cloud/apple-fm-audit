@@ -108,7 +108,7 @@ def requested_model(body: bytes) -> str | None:
 
 def set_json_model(body: bytes, model: str) -> bytes:
     if not body:
-        return json.dumps({"model": model}).encode("utf-8")
+        return json.dumps({"model": model}, ensure_ascii=False).encode("utf-8")
     try:
         payload = json.loads(body.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
@@ -116,4 +116,4 @@ def set_json_model(body: bytes, model: str) -> bytes:
     if not isinstance(payload, dict):
         return body
     payload["model"] = model
-    return json.dumps(payload).encode("utf-8")
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
