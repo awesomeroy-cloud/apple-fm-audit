@@ -87,12 +87,8 @@ $2
 EOF
 }
 
-fm_args="		<string>${FM}</string>
-		<string>serve</string>
-		<string>--host</string>
-		<string>127.0.0.1</string>
-		<string>--port</string>
-		<string>1976</string>"
+fm_args="		<string>/bin/sh</string>
+		<string>${ROOT}/run-fm-serve.sh</string>"
 
 audit_args="		<string>${UV}</string>
 		<string>run</string>

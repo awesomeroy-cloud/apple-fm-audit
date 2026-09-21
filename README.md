@@ -44,7 +44,7 @@ client.chat.completions.create(
 
 ## Run at login (macOS LaunchAgent)
 
-Installs two user agents: `fm serve` on `127.0.0.1:1976` and apple-fm-audit on `127.0.0.1:1977`. They start at login and restart if they exit.
+Installs two user agents: `fm serve` on `127.0.0.1:1976` and apple-fm-audit on `127.0.0.1:1977`. They start at login and restart if they exit. On macOS 27.2, `fm serve` is launched through `Terminal.app` in the background via `run-fm-serve.sh` to satisfy PCC `ParentProcessGate` requirements.
 
 ```bash
 ./install-service.sh
