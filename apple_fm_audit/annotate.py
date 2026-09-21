@@ -6,6 +6,8 @@ import http.client
 import json
 from typing import Any
 
+from apple_fm_audit.pcc import pcc_availability
+
 
 def _blob(*parts: Any) -> str:
     return " ".join(str(p) for p in parts if p).lower()
@@ -23,6 +25,8 @@ def classify_issue(
         return {"id": "context", "label": "context"}
     if "assetsunavailable" in text or "assets unavailable" in text:
         return {"id": "assets", "label": "assets"}
+    if error and str(error).startswith("pcc ") and (status is None or status < 400):
+        return {"id": "fallback", "label": "fallback"}
     if "broken pipe" in text or "proxy_error" in text or "upstream" in text:
         return {"id": "proxy", "label": "proxy"}
     if status is not None and status >= 400:
@@ -111,17 +115,20 @@ def inspect_upstream(host: str, port: int) -> dict[str, Any]:
         raw = resp.read().decode("utf-8", errors="replace")
         conn.close()
     except Exception as exc:
-        return {
+        down = {
             "reachable": False,
             "available": False,
             "name": "",
             "reason": str(exc),
             "models": [],
         }
+        down["pcc"] = pcc_availability(down)
+        return down
     parsed = parse_health(raw)
     if resp.status >= 400 and parsed["available"]:
         parsed["available"] = False
         parsed["reason"] = parsed["reason"] or f"health HTTP {resp.status}"
+    parsed["pcc"] = pcc_availability(parsed)
     return parsed
 
 

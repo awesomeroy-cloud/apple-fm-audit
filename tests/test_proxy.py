@@ -118,6 +118,22 @@ class ProxyTest(unittest.TestCase):
         row = self.store.get_call(self.store.list_calls()[0]["id"])
         self.assertIn("hi", row["req_body"])
 
+    def test_pcc_falls_back_to_system_when_missing(self):
+        data = b'{"model":"pcc","messages":[{"role":"user","content":"hi"}],"stream":false}'
+        req = Request(
+            self.base + "/v1/chat/completions",
+            data=data,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urlopen(req, timeout=5) as res:
+            json.loads(res.read().decode())
+            fallback = res.headers.get("X-Apple-FM-Fallback")
+        self.assertTrue(fallback)
+        self.assertIn("unsupported", fallback)
+        forwarded = json.loads(Upstream.last_body.decode())
+        self.assertEqual(forwarded["model"], "system")
+
     def test_ui_is_not_proxied(self):
         with urlopen(self.base + "/", timeout=5) as res:
             html = res.read().decode()

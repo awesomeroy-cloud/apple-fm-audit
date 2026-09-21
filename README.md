@@ -31,6 +31,8 @@ API provider fields:
 - Model: `system`
 - Wire API: Chat Completions or Responses (both work)
 
+`model: "pcc"` uses Private Cloud Compute when `fm serve` lists it (macOS 27.2). If PCC is missing, not eligible, not ready, or the request fails because the network is down, the proxy retries with on-device `system` and sets `X-Apple-FM-Fallback`.
+
 ```python
 from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:1977/v1", api_key="not-checked")

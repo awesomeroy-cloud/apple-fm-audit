@@ -19,6 +19,13 @@ from apple_fm_audit.convert import (
 from apple_fm_audit.headers import is_local_path, upstream_headers
 from apple_fm_audit.annotate import inspect_upstream
 from apple_fm_audit.license_check import inspect_license
+from apple_fm_audit.pcc import (
+    choose_model,
+    is_network_failure,
+    is_pcc_model,
+    requested_model,
+    set_json_model,
+)
 from apple_fm_audit.store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -183,31 +190,86 @@ class AuditHandler(BaseHTTPRequestHandler):
         req_headers = {k: v for k, v in self.headers.items()}
         fwd_path, fwd_body, as_responses = rewrite_upstream(parsed.path, req_body)
         fwd = upstream_headers(req_headers)
+        host, port = self.server.upstream  # type: ignore[attr-defined]
+        want_model = requested_model(fwd_body)
+        used_model = want_model or "system"
+        fallback_note = None
+        if self.command in ("POST", "PUT", "PATCH") and is_pcc_model(want_model):
+            health = inspect_upstream(host, port)
+            used_model, fallback_note = choose_model(want_model, health)
+            if fwd_body and used_model != "pcc":
+                fwd_body = set_json_model(fwd_body, used_model)
         if fwd_body:
             fwd["Content-Type"] = "application/json"
             fwd["Content-Length"] = str(len(fwd_body))
         else:
             fwd.pop("Content-Length", None)
 
-        host, port = self.server.upstream  # type: ignore[attr-defined]
         started = time.perf_counter()
         status = None
         res_headers: dict[str, str] = {}
         res_body = b""
-        error = None
+        error = fallback_note
+        upstream_path = fwd_path + (("?" + parsed.query) if parsed.query else "")
         conn = http.client.HTTPConnection(host, port, timeout=600)
         try:
             conn.request(
                 self.command,
-                fwd_path + (("?" + parsed.query) if parsed.query else ""),
+                upstream_path,
                 body=fwd_body or None,
                 headers=fwd,
             )
             resp = conn.getresponse()
+            ctype_early = (resp.getheader("Content-Type") or "").lower()
+            streaming_early = "text/event-stream" in ctype_early
+            if (
+                is_pcc_model(want_model)
+                and used_model == "pcc"
+                and not streaming_early
+            ):
+                peek = resp.read()
+                if is_network_failure(resp.status, peek.decode("utf-8", "replace"), None):
+                    conn.close()
+                    used_model = "system"
+                    fallback_note = "pcc network failure, retry on-device"
+                    error = fallback_note
+                    fwd_body = set_json_model(fwd_body, "system")
+                    fwd["Content-Length"] = str(len(fwd_body))
+                    conn = http.client.HTTPConnection(host, port, timeout=600)
+                    conn.request(
+                        self.command,
+                        upstream_path,
+                        body=fwd_body or None,
+                        headers=fwd,
+                    )
+                    resp = conn.getresponse()
+                else:
+                    class _Cached:
+                        def __init__(self, inner, data):
+                            self._inner = inner
+                            self._data = data
+                            self.status = inner.status
+                            self.reason = inner.reason
+
+                        def getheader(self, name, default=None):
+                            return self._inner.getheader(name, default)
+
+                        def getheaders(self):
+                            return self._inner.getheaders()
+
+                        def read(self, amt=None):
+                            data = self._data
+                            self._data = b""
+                            return data
+
+                    resp = _Cached(resp, peek)
             status = resp.status
             res_headers = {k: v for k, v in resp.getheaders()}
             self.send_response(resp.status, resp.reason)
             self._cors()
+            if fallback_note:
+                self.send_header("X-Apple-FM-Model", used_model)
+                self.send_header("X-Apple-FM-Fallback", fallback_note[:180])
             hop = {
                 "connection",
                 "keep-alive",

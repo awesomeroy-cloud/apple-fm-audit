@@ -92,6 +92,14 @@ async function loadStatus() {
   } else {
     document.getElementById("meta-model").textContent = model.reason || "unavailable";
   }
+  const pcc = model.pcc || {};
+  const pccEl = document.getElementById("meta-pcc");
+  if (pccEl) {
+    if (pcc.state === "available") pccEl.textContent = "available";
+    else if (pcc.state === "unsupported") pccEl.textContent = "unsupported (needs 27.2)";
+    else if (pcc.state) pccEl.textContent = pcc.reason ? `${pcc.state}: ${pcc.reason}` : pcc.state;
+    else pccEl.textContent = "…";
+  }
   const box = document.getElementById("license");
   const pre = document.getElementById("license-text");
   if (license.agreed) {
