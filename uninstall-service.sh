@@ -22,3 +22,9 @@ for port in 1976 1977; do
     kill ${pids} 2>/dev/null || true
   fi
 done
+
+osascript -e 'tell application "Terminal"
+  try
+    close (every window whose name contains "fm serve" or busy of selected tab is false) saving no
+  end try
+end tell' 2>/dev/null || true
