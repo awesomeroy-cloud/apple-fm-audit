@@ -6,6 +6,8 @@ set -eu
 cd "$(dirname "$0")"
 ROOT="$PWD"
 LISTEN_HOST="127.0.0.1"
+LABEL_FM="org.apple-fm-audit.fm-serve"
+LABEL_AUDIT="org.apple-fm-audit.proxy"
 for arg in "$@"; do
   case "$arg" in
     --lan) LISTEN_HOST="0.0.0.0" ;;
@@ -101,11 +103,15 @@ audit_args="		<string>${UV}</string>
 		<string>-m</string>
 		<string>apple_fm_audit</string>"
 
-write_plist "com.roy.fm-serve" "${fm_args}"
-write_plist "com.roy.apple-fm-audit" "${audit_args}"
+write_plist "${LABEL_FM}" "${fm_args}"
+write_plist "${LABEL_AUDIT}" "${audit_args}"
 
+for label in "${LABEL_FM}" "${LABEL_AUDIT}"; do
+  launchctl bootout "${GUI}/${label}" 2>/dev/null || true
+done
 for label in com.roy.fm-serve com.roy.apple-fm-audit; do
   launchctl bootout "${GUI}/${label}" 2>/dev/null || true
+  rm -f "${AGENTS}/${label}.plist"
 done
 
 # Free the ports if a manual instance is still bound.
@@ -118,25 +124,21 @@ for port in 1976 1977; do
 done
 sleep 0.4
 
-launchctl bootstrap "${GUI}" "${AGENTS}/com.roy.fm-serve.plist"
-launchctl bootstrap "${GUI}" "${AGENTS}/com.roy.apple-fm-audit.plist"
-launchctl enable "${GUI}/com.roy.fm-serve"
-launchctl enable "${GUI}/com.roy.apple-fm-audit"
+launchctl bootstrap "${GUI}" "${AGENTS}/${LABEL_FM}.plist"
+launchctl bootstrap "${GUI}" "${AGENTS}/${LABEL_AUDIT}.plist"
+launchctl enable "${GUI}/${LABEL_FM}"
+launchctl enable "${GUI}/${LABEL_AUDIT}"
 
-LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
 echo "installed"
-echo "  com.roy.fm-serve        -> http://127.0.0.1:1976  (loopback)"
+echo "  ${LABEL_FM}     -> http://127.0.0.1:1976  (loopback)"
 if [ "${LISTEN_HOST}" = "0.0.0.0" ]; then
-  echo "  com.roy.apple-fm-audit  -> http://0.0.0.0:1977"
-  if [ -n "${LAN_IP}" ]; then
-    echo "  LAN UI                  -> http://${LAN_IP}:1977"
-    echo "  LAN base URL            -> http://${LAN_IP}:1977/v1"
-  fi
+  echo "  ${LABEL_AUDIT}        -> 0.0.0.0:1977"
+  echo "  other devices: http://<this-mac-lan-ip>:1977/v1"
   echo "  anyone on this network can use the model and open the audit page"
 else
-  echo "  com.roy.apple-fm-audit  -> http://127.0.0.1:1977"
+  echo "  ${LABEL_AUDIT}        -> http://127.0.0.1:1977"
   echo "  LAN: re-run $0 --lan"
 fi
-echo "logs: ${LOGS}/com.roy.fm-serve.log"
-echo "      ${LOGS}/com.roy.apple-fm-audit.log"
+echo "logs: ${LOGS}/${LABEL_FM}.log"
+echo "      ${LOGS}/${LABEL_AUDIT}.log"
 echo "remove: ${ROOT}/uninstall-service.sh"
