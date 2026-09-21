@@ -48,8 +48,11 @@ Installs two user agents: `fm serve` on `127.0.0.1:1976` and apple-fm-audit on `
 
 ```bash
 ./install-service.sh
+./install-service.sh --lan    # bind 0.0.0.0:1977 for other machines on the LAN
 ./uninstall-service.sh
 ```
+
+`--lan` keeps `fm serve` on `127.0.0.1:1976`. Other devices use `http://<this-mac-lan-ip>:1977/v1`. There is no auth. macOS Firewall may ask to allow incoming Python.
 
 Logs: `~/Library/Logs/com.roy.fm-serve.log` and `~/Library/Logs/com.roy.apple-fm-audit.log`.
 

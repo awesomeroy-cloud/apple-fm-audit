@@ -1,8 +1,20 @@
 #!/bin/sh
 # Install LaunchAgents so fm serve and apple-fm-audit start at login.
+# ./install-service.sh        loopback only
+# ./install-service.sh --lan  audit UI/API on 0.0.0.0:1977 (fm serve stays on 127.0.0.1)
 set -eu
 cd "$(dirname "$0")"
 ROOT="$PWD"
+LISTEN_HOST="127.0.0.1"
+for arg in "$@"; do
+  case "$arg" in
+    --lan) LISTEN_HOST="0.0.0.0" ;;
+    -h|--help)
+      echo "usage: $0 [--lan]"
+      exit 0
+      ;;
+  esac
+done
 UID_NUM="$(id -u)"
 GUI="gui/${UID_NUM}"
 AGENTS="${HOME}/Library/LaunchAgents"
@@ -50,7 +62,7 @@ write_plist() {
 		<key>PYTHONPATH</key>
 		<string>${ROOT}</string>
 		<key>AFM_LISTEN_HOST</key>
-		<string>127.0.0.1</string>
+		<string>${LISTEN_HOST}</string>
 		<key>AFM_LISTEN_PORT</key>
 		<string>1977</string>
 		<key>AFM_UPSTREAM</key>
@@ -111,9 +123,20 @@ launchctl bootstrap "${GUI}" "${AGENTS}/com.roy.apple-fm-audit.plist"
 launchctl enable "${GUI}/com.roy.fm-serve"
 launchctl enable "${GUI}/com.roy.apple-fm-audit"
 
+LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
 echo "installed"
-echo "  com.roy.fm-serve        -> http://127.0.0.1:1976"
-echo "  com.roy.apple-fm-audit  -> http://127.0.0.1:1977"
+echo "  com.roy.fm-serve        -> http://127.0.0.1:1976  (loopback)"
+if [ "${LISTEN_HOST}" = "0.0.0.0" ]; then
+  echo "  com.roy.apple-fm-audit  -> http://0.0.0.0:1977"
+  if [ -n "${LAN_IP}" ]; then
+    echo "  LAN UI                  -> http://${LAN_IP}:1977"
+    echo "  LAN base URL            -> http://${LAN_IP}:1977/v1"
+  fi
+  echo "  anyone on this network can use the model and open the audit page"
+else
+  echo "  com.roy.apple-fm-audit  -> http://127.0.0.1:1977"
+  echo "  LAN: re-run $0 --lan"
+fi
 echo "logs: ${LOGS}/com.roy.fm-serve.log"
 echo "      ${LOGS}/com.roy.apple-fm-audit.log"
 echo "remove: ${ROOT}/uninstall-service.sh"
