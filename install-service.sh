@@ -60,7 +60,7 @@ write_plist() {
 		<key>HOME</key>
 		<string>${HOME}</string>
 		<key>PATH</key>
-		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<string>/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
 		<key>PYTHONPATH</key>
 		<string>${ROOT}</string>
 		<key>AFM_LISTEN_HOST</key>
