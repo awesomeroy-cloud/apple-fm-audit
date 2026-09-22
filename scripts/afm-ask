@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""CLI utility to query apple-fm-audit local service or PCC model."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Query Apple Foundation Model via apple-fm-audit proxy."
+    )
+    parser.add_argument(
+        "prompt",
+        nargs="?",
+        default=None,
+        help="Prompt text. If omitted, input is read from stdin.",
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        default=os.environ.get("AFM_MODEL", "system"),
+        choices=["system", "pcc"],
+        help="Target model: 'system' (on-device) or 'pcc' (Private Cloud Compute). Default: system",
+    )
+    parser.add_argument(
+        "-s",
+        "--system",
+        default=None,
+        help="System instruction / prompt context.",
+    )
+    parser.add_argument(
+        "-u",
+        "--url",
+        default=os.environ.get("AFM_API_URL", "http://127.0.0.1:1977/v1/chat/completions"),
+        help="API URL. Default: http://127.0.0.1:1977/v1/chat/completions",
+    )
+    parser.add_argument(
+        "-t",
+        "--temperature",
+        type=float,
+        default=None,
+        help="Sampling temperature.",
+    )
+
+    args = parser.parse_args()
+
+    content = args.prompt
+    if content is None:
+        if not sys.stdin.isatty():
+            content = sys.stdin.read().strip()
+        else:
+            parser.print_help(sys.stderr)
+            return 1
+
+    if not content:
+        sys.stderr.write("Error: Empty prompt received.\n")
+        return 1
+
+    messages: list[dict[str, str]] = []
+    if args.system:
+        messages.append({"role": "system", "content": args.system})
+    messages.append({"role": "user", "content": content})
+
+    payload: dict[str, object] = {
+        "model": args.model,
+        "messages": messages,
+        "stream": False,
+    }
+    if args.temperature is not None:
+        payload["temperature"] = args.temperature
+
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = Request(
+        args.url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(req, timeout=120) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            choices = body.get("choices") or []
+            if not choices:
+                sys.stderr.write("Error: Received empty choices in response.\n")
+                return 1
+            text = choices[0].get("message", {}).get("content", "")
+            sys.stdout.write(text.strip() + "\n")
+            return 0
+    except HTTPError as e:
+        err_body = e.read().decode("utf-8", "replace")
+        sys.stderr.write(f"HTTP Error {e.code}: {err_body}\n")
+        return 1
+    except URLError as e:
+        sys.stderr.write(f"Network Error: {e.reason}\n")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

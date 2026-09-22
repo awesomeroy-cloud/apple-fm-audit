@@ -56,6 +56,26 @@ Installs two user agents: `fm serve` on `127.0.0.1:1976` and apple-fm-audit on `
 
 Logs: `~/Library/Logs/org.apple-fm-audit.fm-serve.log` and `~/Library/Logs/org.apple-fm-audit.proxy.log`.
 
+## Apple Shortcuts (快捷指令)
+
+Pre-built and signed `.shortcut` files are provided in [`shortcuts/`](shortcuts/):
+- **AFM 智能问答**: Interactive dialog prompt with clipboard copy and dialog output.
+- **AFM 划词总结**: macOS Quick Action / Services menu for summarizing or polishing selected text.
+- **AFM 私有云问答 (PCC)**: Routes prompts through Private Cloud Compute.
+- **AFM 极速问答 (Shell)**: macOS native shell execution via `scripts/afm-ask`.
+
+Import directly via:
+```bash
+open "shortcuts/AFM 智能问答.shortcut"
+open "shortcuts/AFM 划词总结.shortcut"
+```
+
+Standalone CLI helper:
+```bash
+./scripts/afm-ask "Explain quantum computing in one sentence"
+```
+See [shortcuts/README.md](shortcuts/README.md) for full configuration and iOS setup.
+
 ## Run with Docker
 
 `fm serve` stays on the host. Compose maps `host.docker.internal:1976` to that process.
