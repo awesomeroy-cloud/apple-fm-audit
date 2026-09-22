@@ -193,8 +193,80 @@ filterEl.addEventListener("input", () => {
   loadList();
 });
 
+const btnFetchQuota = document.getElementById("btn-fetch-quota");
+const quotaBadge = document.getElementById("quota-badge");
+const quotaUpdated = document.getElementById("quota-updated");
+
+function renderQuota(data) {
+  if (!quotaBadge) return;
+  const pcc = data.pcc || {};
+  const quota = pcc.quota || {};
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+
+  if (!pcc.available) {
+    quotaBadge.className = "badge is-warn";
+    quotaBadge.textContent = pcc.reason ? `PCC 不可用: ${pcc.reason}` : "PCC 不可用";
+  } else if (quota.limit_reached) {
+    quotaBadge.className = "badge is-fault";
+    quotaBadge.textContent = "PCC 限额已满 (Limit Reached)";
+  } else if (quota.approaching_limit) {
+    quotaBadge.className = "badge is-warn";
+    quotaBadge.textContent = "PCC 接近限额 (Approaching)";
+  } else {
+    quotaBadge.className = "badge is-ok";
+    quotaBadge.textContent = "正常 (Normal)";
+  }
+
+  if (quotaUpdated) {
+    let msg = `已更新 ${timeStr}`;
+    if (quota.resets_at) {
+      const rd = new Date(quota.resets_at);
+      const rStr = Number.isNaN(rd.getTime()) ? String(quota.resets_at) : rd.toLocaleString();
+      msg += ` (限额重置: ${rStr})`;
+    }
+    quotaUpdated.textContent = msg;
+  }
+}
+
+async function fetchQuota() {
+  if (!btnFetchQuota) return;
+  btnFetchQuota.disabled = true;
+  const btnText = btnFetchQuota.querySelector(".quota-btn-text");
+  const origText = btnText ? btnText.textContent : "获取 Usage Limit";
+  if (btnText) btnText.textContent = "正在获取...";
+
+  try {
+    const res = await fetch("/_audit/quota");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderQuota(data);
+  } catch (err) {
+    if (quotaBadge) {
+      quotaBadge.className = "badge is-fault";
+      quotaBadge.textContent = "获取失败";
+    }
+    if (quotaUpdated) {
+      quotaUpdated.textContent = err.message;
+    }
+  } finally {
+    btnFetchQuota.disabled = false;
+    if (btnText) btnText.textContent = origText;
+  }
+}
+
+if (btnFetchQuota) {
+  btnFetchQuota.addEventListener("click", fetchQuota);
+}
+
 loadStatus();
 loadList();
+fetchQuota();
 timer = setInterval(loadList, 1500);
 setInterval(loadStatus, 4000);
 if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {

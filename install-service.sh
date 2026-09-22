@@ -21,21 +21,27 @@ UID_NUM="$(id -u)"
 GUI="gui/${UID_NUM}"
 AGENTS="${HOME}/Library/LaunchAgents"
 LOGS="${HOME}/Library/Logs"
-UV="$(command -v uv)"
-FM="$(command -v fm)"
+FM="$(command -v fm || echo '/usr/bin/fm')"
 
-if [ -z "${UV}" ]; then
-  echo "uv is required. Install: https://docs.astral.sh/uv/" >&2
-  exit 1
-fi
-if [ -z "${FM}" ]; then
+if [ ! -x "${FM}" ]; then
   echo "fm is required (/usr/bin/fm on macOS 27)." >&2
   exit 1
 fi
 
 mkdir -p "${AGENTS}" "${LOGS}" "${ROOT}/data"
-export PYTHONPATH="${ROOT}"
-uv sync --frozen
+
+echo "Compiling native Swift release binary..."
+if [ -d "/Applications/Xcode-beta.app/Contents/Developer" ]; then
+  DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift build -c release
+else
+  swift build -c release
+fi
+
+BINARY="${ROOT}/.build/release/apple-fm-audit"
+if [ ! -x "${BINARY}" ]; then
+  echo "Failed to find built binary at ${BINARY}" >&2
+  exit 1
+fi
 
 write_plist() {
   label="$1"
@@ -61,8 +67,6 @@ write_plist() {
 		<string>${HOME}</string>
 		<key>PATH</key>
 		<string>/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-		<key>PYTHONPATH</key>
-		<string>${ROOT}</string>
 		<key>AFM_LISTEN_HOST</key>
 		<string>${LISTEN_HOST}</string>
 		<key>AFM_LISTEN_PORT</key>
@@ -71,6 +75,8 @@ write_plist() {
 		<string>127.0.0.1:1976</string>
 		<key>AFM_DB</key>
 		<string>${ROOT}/data/audit.sqlite</string>
+		<key>AFM_STATIC_DIR</key>
+		<string>${ROOT}/static</string>
 		<key>AFM_FM_BIN</key>
 		<string>${FM}</string>
 	</dict>
@@ -90,14 +96,7 @@ EOF
 fm_args="		<string>/bin/sh</string>
 		<string>${ROOT}/run-fm-serve.sh</string>"
 
-audit_args="		<string>${UV}</string>
-		<string>run</string>
-		<string>--directory</string>
-		<string>${ROOT}</string>
-		<string>--frozen</string>
-		<string>python</string>
-		<string>-m</string>
-		<string>apple_fm_audit</string>"
+audit_args="		<string>${BINARY}</string>"
 
 write_plist "${LABEL_FM}" "${fm_args}"
 write_plist "${LABEL_AUDIT}" "${audit_args}"

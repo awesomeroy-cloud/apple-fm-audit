@@ -12,7 +12,7 @@ Chat Completions bodies are forwarded unchanged. `POST /v1/responses` is transla
 
 ## Run with the script
 
-Needs [uv](https://docs.astral.sh/uv/), Python 3.10+ (uv installs it), and `fm serve` on the upstream port. First use of `fm` on a Mac requires agreeing to Apple's terms yourself:
+Built natively in Swift with Hummingbird 2 and SwiftNIO. Requires macOS 14+ (Apple Silicon) and `fm serve` on the upstream port. First use of `fm` on a Mac requires agreeing to Apple's terms yourself:
 
 ```bash
 sudo fm license
@@ -20,7 +20,7 @@ fm serve
 ./run.sh
 ```
 
-`./run.sh` runs `uv sync` and `fm license --status`. It does not type `yes` for you. If terms are not agreed, it prints the notice, still starts the UI, and the page shows the same text until you finish `sudo fm license`.
+`./run.sh` builds the release binary and checks `fm license --status`. It does not type `yes` for you. If terms are not agreed, it prints the notice, still starts the UI, and the page shows the same text until you finish `sudo fm license`.
 
 Open [http://127.0.0.1:1977](http://127.0.0.1:1977). Point the client at the same origin:
 
@@ -76,27 +76,50 @@ Standalone CLI helper:
 ```
 See [shortcuts/README.md](shortcuts/README.md) for full configuration and iOS setup.
 
-## Run with Docker
+## OpenAI-Compatible Text-to-Speech (`POST /v1/audio/speech`)
 
-`fm serve` stays on the host. Compose maps `host.docker.internal:1976` to that process.
+Synthesizes speech directly using macOS native `AVSpeechSynthesizer` and CoreAudio encoders with zero third-party dependencies.
 
 ```bash
-fm serve
-docker compose up --build
+curl -X POST http://127.0.0.1:1977/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Apple Foundation Models native proxy audio synthesis.",
+    "voice": "shimmer",
+    "speed": 1.0,
+    "pitch": 1.0,
+    "response_format": "wav"
+  }' \
+  --output speech.wav
 ```
+
+### Supported TTS Parameters
+- `voice`: OpenAI aliases automatically mapped to installed macOS Premium Neural voices:
+  - `shimmer` -> `com.apple.voice.premium.zh-CN.Lilian` (Mandarin Female)
+  - `alloy` -> `com.apple.voice.premium.en-US.Zoe` (English Female)
+  - `echo` -> `com.apple.voice.premium.zh-CN.Yun` (Mandarin Male)
+  - `fable` -> `com.apple.voice.premium.zh-CN.Lili` (Mandarin Female)
+  - `onyx` -> `com.apple.voice.premium.zh-CN.Yue` (Mandarin Male)
+  - `nova` -> `com.apple.voice.premium.zh-TW.Meijia` (Taiwanese Mandarin)
+  - Also accepts system voice identifiers (e.g. `com.apple.voice.premium.zh-CN.Lilian`) or system voice names (`Lilian`, `Zoe`, `Tingting`).
+- `speed`: Multiplier on standard speech rate (`0.25` - `4.0`).
+- `pitch` / `pitch_multiplier`: Fundamental frequency multiplier (`0.5` - `2.0`).
+- `volume`: Amplitude multiplier (`0.0` - `1.0`).
+- `language`: BCP-47 language tag (e.g. `zh-CN`, `en-US`, `ja-JP`).
+- `response_format`: `wav` (22.05kHz 32-bit float PCM), `aac` / `m4a`, `flac` (lossless), `opus` (CAF container), `caf`, `pcm`. (`mp3` returns HTTP 400 due to absence of native CoreAudio MP3 encoder).
 
 ## Environment
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AFM_LISTEN_HOST` | `127.0.0.1` (`0.0.0.0` in Docker) | Bind address |
+| `AFM_LISTEN_HOST` | `127.0.0.1` | Bind address |
 | `AFM_LISTEN_PORT` | `1977` | Port for UI and proxy |
 | `AFM_UPSTREAM` | `127.0.0.1:1976` | `fm serve` (or any HTTP origin) |
 | `AFM_DB` | `data/audit.sqlite` | SQLite file |
 | `AFM_FM_BIN` | `fm` | Path to the `fm` binary for the license check |
 
 ## Local routes (not proxied)
-
+ 
 - `GET /` audit page
 - `GET /_audit/calls` list
 - `GET /_audit/calls/:id` one call
@@ -104,16 +127,21 @@ docker compose up --build
 - `GET /_audit/meta` listen/upstream
 - `GET /_audit/license` `fm license --status` / `--show` (never auto-agrees)
 - `GET /_audit/status` license plus `GET /health` model availability
-
-Everything else, including `/v1/chat/completions` and `/health`, goes upstream.
-
+- `GET /_audit/quota` PCC usage limits and reset date (`resets_at`)
+- `POST /v1/audio/speech` native macOS text-to-speech synthesis (OpenAI-compatible)
+ 
+Everything else, including `/v1/chat/completions`, `/responses`, `/v1/responses`, and `/health`, goes upstream.
+ 
 ## Tests
-
+ 
 ```bash
-uv sync --frozen
-PYTHONPATH=. uv run python -m unittest discover -s tests -v
+swift test
 ```
-
+ 
+## Documentation
+ 
+See [docs/foundation_models.md](docs/foundation_models.md) for extracted Apple Foundation Models framework technical specifications.
+ 
 ## License
-
+ 
 MIT.

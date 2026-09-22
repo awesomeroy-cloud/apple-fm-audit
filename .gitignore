@@ -1,5 +1,24 @@
+# macOS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# SwiftPM build artifacts
+.build/
+
+# Runtime data & SQLite databases
 data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log
+
+# Python cache & virtual environments
 __pycache__/
 *.pyc
-.DS_Store
 .venv/
+
+# Internal task planning & scratch notes
+.task/
+.tasks/
+tasks/

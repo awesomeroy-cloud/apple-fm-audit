@@ -25,13 +25,23 @@
       <p class="mark">apple-fm-audit</p>
       <p class="lede">On-device Foundation Model traffic, recorded as it happens.</p>
     </div>
-    <dl class="meta" id="meta">
-      <div><dt>listen</dt><dd id="meta-listen">…</dd></div>
-      <div><dt>upstream</dt><dd id="meta-upstream">…</dd></div>
-      <div><dt>license</dt><dd id="meta-license">…</dd></div>
-      <div><dt>model</dt><dd id="meta-model">…</dd></div>
-      <div><dt>pcc</dt><dd id="meta-pcc">…</dd></div>
-    </dl>
+    <div class="top-meta">
+      <dl class="meta" id="meta">
+        <div><dt>listen</dt><dd id="meta-listen">…</dd></div>
+        <div><dt>upstream</dt><dd id="meta-upstream">…</dd></div>
+        <div><dt>license</dt><dd id="meta-license">…</dd></div>
+        <div><dt>model</dt><dd id="meta-model">…</dd></div>
+        <div><dt>pcc</dt><dd id="meta-pcc">…</dd></div>
+        <div><dt>usage limit</dt><dd id="meta-quota"><span class="badge" id="quota-badge">…</span></dd></div>
+      </dl>
+      <div class="quota-bar">
+        <button type="button" id="btn-fetch-quota" class="quota-btn" title="手动检查 PCC Usage Limit 限额状态">
+          <span class="quota-btn-icon">↻</span>
+          <span class="quota-btn-text">获取 Usage Limit</span>
+        </button>
+        <span id="quota-updated" class="quota-updated"></span>
+      </div>
+    </div>
   </header>
   <main class="bench">
     <section class="run" aria-label="Call log">

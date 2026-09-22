@@ -106,6 +106,88 @@ body {
   margin: 0;
 }
 
+.top-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.quota-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.quota-btn {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 0.3rem 0.65rem;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 2px;
+  color: var(--ink);
+  transition: all 0.15s ease;
+}
+
+.quota-btn:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: var(--oxide);
+}
+
+.quota-btn:active:not(:disabled) {
+  background: #d7dce0;
+}
+
+.quota-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.quota-btn-icon {
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.quota-updated {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--oxide);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.08rem 0.35rem;
+  border-radius: 2px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  background: var(--plate);
+  border: 1px solid var(--line);
+}
+
+.badge.is-ok {
+  background: #e2efe8;
+  color: var(--ok);
+  border-color: #b5dac9;
+}
+
+.badge.is-warn {
+  background: #fbf3df;
+  color: var(--warn);
+  border-color: #ecd9a3;
+}
+
+.badge.is-fault {
+  background: #fae4e7;
+  color: var(--fault);
+  border-color: #eeb5bc;
+}
+
 .bench {
   flex: 1;
   display: grid;
