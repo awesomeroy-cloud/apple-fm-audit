@@ -31,6 +31,50 @@ public struct AppConfiguration: Sendable {
     }
 }
 
+public struct DynamicCORSMiddleware<Context: RequestContext>: RouterMiddleware {
+    public init() {}
+
+    public func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
+        guard let origin = request.headers[.origin] else {
+            return try await next(request, context)
+        }
+
+        if request.method == .options {
+            var headers = HTTPFields()
+            headers[.accessControlAllowOrigin] = origin
+            headers[.accessControlAllowMethods] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+            let reqHeaders = request.headers[HTTPField.Name("access-control-request-headers") ?? .authorization] ?? "*"
+            headers[.accessControlAllowHeaders] = reqHeaders
+            headers[.accessControlAllowCredentials] = "true"
+            headers[.accessControlMaxAge] = "86400"
+            headers[values: .vary].append("Origin")
+            return Response(status: .noContent, headers: headers, body: .init())
+        }
+
+        do {
+            var response = try await next(request, context)
+            response.headers[.accessControlAllowOrigin] = origin
+            response.headers[.accessControlAllowCredentials] = "true"
+            response.headers[values: .vary].append("Origin")
+            return response
+        } catch let httpError as HTTPResponseError {
+            var response = try httpError.response(from: request, context: context)
+            response.headers[.accessControlAllowOrigin] = origin
+            response.headers[.accessControlAllowCredentials] = "true"
+            response.headers[values: .vary].append("Origin")
+            return response
+        } catch {
+            var headers = HTTPFields()
+            headers[.accessControlAllowOrigin] = origin
+            headers[.accessControlAllowCredentials] = "true"
+            headers[.contentType] = "application/json; charset=utf-8"
+            headers[values: .vary].append("Origin")
+            let errBody = "{\"error\":{\"message\":\"\(error.localizedDescription)\",\"type\":\"internal_error\"}}"
+            return Response(status: .internalServerError, headers: headers, body: .init(byteBuffer: ByteBuffer(string: errBody)))
+        }
+    }
+}
+
 public enum AppBuilder {
     public static func buildRouter(
         config: AppConfiguration,
@@ -39,22 +83,7 @@ public enum AppBuilder {
     ) -> Router<BasicRequestContext> {
         let router = Router()
 
-        let corsHeaders: [HTTPField.Name] = [
-            .accept,
-            .authorization,
-            .contentType,
-            .origin,
-            HTTPField.Name("OpenAI-Beta") ?? .authorization
-        ]
-
-        router.add(
-            middleware: CORSMiddleware(
-                allowOrigin: .originBased,
-                allowHeaders: corsHeaders,
-                allowMethods: [.get, .post, .put, .patch, .delete, .options, .head],
-                maxAge: .seconds(600)
-            )
-        )
+        router.add(middleware: DynamicCORSMiddleware())
 
         let auditRoutes = AuditRoutes(
             store: store,
