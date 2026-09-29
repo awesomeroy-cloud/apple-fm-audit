@@ -13,10 +13,6 @@ data/
 *.sqlite-shm
 *.log
 
-# Python cache & virtual environments
-__pycache__/
-*.pyc
-.venv/
 
 # Internal task planning & scratch notes
 .task/

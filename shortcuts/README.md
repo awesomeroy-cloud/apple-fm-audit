@@ -11,7 +11,7 @@
 | **`AFM 智能问答.shortcut`** | macOS / iOS | 菜单栏 / 快捷键 / Siri | `system` (本地模型) / HTTP POST | 弹窗提问，请求结果写入剪贴板并弹窗显示。 |
 | **`AFM 私有云问答 (PCC).shortcut`** | macOS / iOS | 菜单栏 / 快捷键 / Siri | `pcc` (私有云计算) / HTTP POST | 路由至 Apple PCC 模型处理，兼具本地回退。 |
 | **`AFM 划词总结.shortcut`** | macOS | 右键「服务」菜单 / 划词快捷键 | `system` (本地模型) / 快速操作 | 读取任意软件中选中的文字，提炼要点并输出。 |
-| **`AFM 极速问答 (Shell).shortcut`** | macOS | 菜单栏 / 终端 / 快捷键 | 本地 `scripts/afm-ask` 进程调用 | 绕过 HTTP 字典解析，由本地 Python 脚本直接输出。 |
+| **`AFM 极速问答 (Shell).shortcut`** | macOS | 菜单栏 / 终端 / 快捷键 | 本地 `scripts/afm-ask` 进程调用 | 绕过 HTTP 字典解析，由本地 POSIX Shell 脚本直接输出。 |
 
 ---
 
@@ -77,13 +77,3 @@ git diff | ./scripts/afm-ask -s "用简短的中文总结这份 git diff 的修�
 ./scripts/afm-ask -m pcc "分析分布式一致性协议 Raft 与 Paxos 的区别"
 ```
 
----
-
-## 重新生成快捷指令
-
-如需调整默认提示词或模型参数，可直接编辑 [shortcuts/build_shortcuts.py](file:///Users/roy/developer/apple-fm-audit/shortcuts/build_shortcuts.py)，然后执行：
-
-```bash
-python3 shortcuts/build_shortcuts.py
-```
-脚本将自动生成并使用 macOS 开发者/本地账户证书对 `.shortcut` 文件进行签名。

@@ -1,106 +1,131 @@
-#!/usr/bin/env python3
-"""CLI utility to query apple-fm-audit local service or PCC model."""
+#!/bin/sh
+# Query Apple Foundation Model via apple-fm-audit proxy
+set -eu
 
-from __future__ import annotations
+MODEL="${AFM_MODEL:-system}"
+API_URL="${AFM_API_URL:-http://127.0.0.1:1977/v1/chat/completions}"
+SYSTEM_PROMPT=""
+TEMPERATURE=""
+PROMPT=""
 
-import argparse
-import json
-import os
-import sys
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+usage() {
+  cat <<EOF
+Usage: afm-ask [options] [prompt]
 
+Arguments:
+  prompt                   Prompt text. If omitted, input is read from stdin.
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Query Apple Foundation Model via apple-fm-audit proxy."
-    )
-    parser.add_argument(
-        "prompt",
-        nargs="?",
-        default=None,
-        help="Prompt text. If omitted, input is read from stdin.",
-    )
-    parser.add_argument(
-        "-m",
-        "--model",
-        default=os.environ.get("AFM_MODEL", "system"),
-        choices=["system", "pcc"],
-        help="Target model: 'system' (on-device) or 'pcc' (Private Cloud Compute). Default: system",
-    )
-    parser.add_argument(
-        "-s",
-        "--system",
-        default=None,
-        help="System instruction / prompt context.",
-    )
-    parser.add_argument(
-        "-u",
-        "--url",
-        default=os.environ.get("AFM_API_URL", "http://127.0.0.1:1977/v1/chat/completions"),
-        help="API URL. Default: http://127.0.0.1:1977/v1/chat/completions",
-    )
-    parser.add_argument(
-        "-t",
-        "--temperature",
-        type=float,
-        default=None,
-        help="Sampling temperature.",
-    )
+Options:
+  -m, --model <model>      Target model: 'system' or 'pcc' (default: ${MODEL})
+  -s, --system <text>      System instruction / prompt context
+  -u, --url <url>          API URL (default: ${API_URL})
+  -t, --temperature <val>  Sampling temperature
+  -h, --help               Show help information
+EOF
+  exit 0
+}
 
-    args = parser.parse_args()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -m|--model)
+      MODEL="$2"
+      shift 2
+      ;;
+    -s|--system)
+      SYSTEM_PROMPT="$2"
+      shift 2
+      ;;
+    -u|--url)
+      API_URL="$2"
+      shift 2
+      ;;
+    -t|--temperature)
+      TEMPERATURE="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      if [ -z "${PROMPT}" ]; then
+        PROMPT="$1"
+      else
+        PROMPT="${PROMPT} $1"
+      fi
+      shift
+      ;;
+  esac
+done
 
-    content = args.prompt
-    if content is None:
-        if not sys.stdin.isatty():
-            content = sys.stdin.read().strip()
-        else:
-            parser.print_help(sys.stderr)
-            return 1
+if [ -z "${PROMPT}" ]; then
+  if [ -t 0 ]; then
+    usage
+  else
+    PROMPT="$(cat)"
+  fi
+fi
 
-    if not content:
-        sys.stderr.write("Error: Empty prompt received.\n")
-        return 1
+if [ -z "${PROMPT}" ]; then
+  echo "Error: Empty prompt received." >&2
+  exit 1
+fi
 
-    messages: list[dict[str, str]] = []
-    if args.system:
-        messages.append({"role": "system", "content": args.system})
-    messages.append({"role": "user", "content": content})
+json_escape() {
+  printf '%s' "$1" | awk '
+    BEGIN { RS="^$"; ORS="" }
+    {
+      gsub(/\\/, "\\\\");
+      gsub(/"/, "\\\"");
+      gsub(/\r/, "\\r");
+      gsub(/\n/, "\\n");
+      gsub(/\t/, "\\t");
+      print;
+    }'
+}
 
-    payload: dict[str, object] = {
-        "model": args.model,
-        "messages": messages,
-        "stream": False,
-    }
-    if args.temperature is not None:
-        payload["temperature"] = args.temperature
+ESC_PROMPT="$(json_escape "${PROMPT}")"
 
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = Request(
-        args.url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+if [ -n "${SYSTEM_PROMPT}" ]; then
+  ESC_SYS="$(json_escape "${SYSTEM_PROMPT}")"
+  MESSAGES="[{\"role\":\"system\",\"content\":\"${ESC_SYS}\"},{\"role\":\"user\",\"content\":\"${ESC_PROMPT}\"}]"
+else
+  MESSAGES="[{\"role\":\"user\",\"content\":\"${ESC_PROMPT}\"}]"
+fi
 
-    try:
-        with urlopen(req, timeout=120) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            choices = body.get("choices") or []
-            if not choices:
-                sys.stderr.write("Error: Received empty choices in response.\n")
-                return 1
-            text = choices[0].get("message", {}).get("content", "")
-            sys.stdout.write(text.strip() + "\n")
-            return 0
-    except HTTPError as e:
-        err_body = e.read().decode("utf-8", "replace")
-        sys.stderr.write(f"HTTP Error {e.code}: {err_body}\n")
-        return 1
-    except URLError as e:
-        sys.stderr.write(f"Network Error: {e.reason}\n")
-        return 1
+if [ -n "${TEMPERATURE}" ]; then
+  PAYLOAD="{\"model\":\"${MODEL}\",\"messages\":${MESSAGES},\"stream\":false,\"temperature\":${TEMPERATURE}}"
+else
+  PAYLOAD="{\"model\":\"${MODEL}\",\"messages\":${MESSAGES},\"stream\":false}"
+fi
 
+RESP="$(curl -s -f -X POST "${API_URL}" \
+  -H "Content-Type: application/json" \
+  -d "${PAYLOAD}" || true)"
 
-if __name__ == "__main__":
-    sys.exit(main())
+if [ -z "${RESP}" ]; then
+  echo "Error: Failed to fetch response from ${API_URL}" >&2
+  exit 1
+fi
+
+CONTENT="$(printf '%s' "${RESP}" | plutil -extract "choices.0.message.content" raw -o - - 2>/dev/null || true)"
+
+if [ -n "${CONTENT}" ]; then
+  printf '%s\n' "${CONTENT}"
+else
+  ERR_MSG="$(printf '%s' "${RESP}" | plutil -extract "error.message" raw -o - - 2>/dev/null || true)"
+  if [ -n "${ERR_MSG}" ]; then
+    echo "Error: ${ERR_MSG}" >&2
+  else
+    echo "Error: Received unrecognized response format:" >&2
+    printf '%s\n' "${RESP}" >&2
+  fi
+  exit 1
+fi
