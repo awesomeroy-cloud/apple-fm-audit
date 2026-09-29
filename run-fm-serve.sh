@@ -24,15 +24,13 @@ PID="$(get_pid || true)"
 WIN_ID=""
 
 if [ -z "${PID}" ]; then
+  open -a /System/Applications/Utilities/Terminal.app 2>/dev/null || true
   WIN_ID="$(osascript -e '
   on run argv
     set fmCmd to item 1 of argv
     set hostArg to item 2 of argv
     set portArg to item 3 of argv
-    tell application "Terminal"
-      try
-        close (every window whose busy of selected tab is false) saving no
-      end try
+    tell application id "com.apple.Terminal"
       set newTab to do script "exec \"" & fmCmd & "\" serve --host " & hostArg & " --port " & portArg
       set w to first window whose tabs contains newTab
       set visible of w to false
@@ -40,7 +38,7 @@ if [ -z "${PID}" ]; then
     end tell
   end run' "${FM}" "${HOST}" "${PORT}" 2>/dev/null || true)"
 
-  for _ in $(seq 1 30); do
+  for _ in $(seq 1 50); do
     PID="$(get_pid || true)"
     if [ -n "${PID}" ]; then
       break
@@ -50,20 +48,7 @@ if [ -z "${PID}" ]; then
 fi
 
 if [ -z "${PID}" ]; then
-  echo "Terminal launch failed or unavailable, starting fm serve directly..."
-  "${FM}" serve --host "${HOST}" --port "${PORT}" &
-  DIRECT_PID="$!"
-  for _ in $(seq 1 30); do
-    PID="$(get_pid || true)"
-    if [ -n "${PID}" ]; then
-      break
-    fi
-    sleep 0.2
-  done
-fi
-
-if [ -z "${PID}" ]; then
-  echo "Failed to start fm serve on ${HOST}:${PORT}" >&2
+  echo "Failed to start fm serve in Terminal on ${HOST}:${PORT}" >&2
   exit 1
 fi
 
@@ -74,7 +59,7 @@ cleanup() {
     kill "${PID}" 2>/dev/null || true
   fi
   if [ -n "${WIN_ID:-}" ]; then
-    osascript -e "tell application \"Terminal\" to try
+    osascript -e "tell application id \"com.apple.Terminal\" to try
       close (window id ${WIN_ID}) saving no
     end try" 2>/dev/null || true
   fi
