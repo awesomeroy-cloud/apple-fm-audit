@@ -12,7 +12,7 @@ Chat Completions bodies are forwarded unchanged. `POST /v1/responses` is transla
 
 ## Run with the script
 
-Built natively in Swift with Hummingbird 2 and SwiftNIO. Requires macOS 14+ (Apple Silicon) and `fm serve` on the upstream port. First use of `fm` on a Mac requires agreeing to Apple's terms yourself:
+Built natively in Swift with Hummingbird 2 and SwiftNIO. Requires macOS 27.2 (Apple Silicon) and `fm serve` on the upstream port. First use of `fm` on a Mac requires agreeing to Apple's terms yourself:
 
 ```bash
 sudo fm license
@@ -52,7 +52,7 @@ Installs two user agents: `fm serve` on `127.0.0.1:1976` and apple-fm-audit on `
 ./uninstall-service.sh
 ```
 
-`--lan` keeps `fm serve` on `127.0.0.1:1976`. Other devices use `http://<this-mac-lan-ip>:1977/v1`. There is no auth. macOS Firewall may ask to allow incoming Python.
+`--lan` keeps `fm serve` on `127.0.0.1:1976`. Other devices use `http://<this-mac-lan-ip>:1977/v1`. There is no auth. macOS Firewall may ask to allow incoming connections.
 
 Logs: `~/Library/Logs/org.apple-fm-audit.fm-serve.log` and `~/Library/Logs/org.apple-fm-audit.proxy.log`.
 

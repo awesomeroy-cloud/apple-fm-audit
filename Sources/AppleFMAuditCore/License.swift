@@ -57,12 +57,12 @@ public enum License {
     public static func run(executable: String, arguments: [String], timeoutSeconds: Double = 15.0) -> (code: Int32, output: String) {
         let process = Process()
         if executable.contains("/") {
-            process.executableURL = URL(fileURLWithPath: executable)
+            process.executableURL = URL(filePath: executable)
         } else {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.executableURL = URL(filePath: "/usr/bin/env")
             process.arguments = [executable] + arguments
         }
-        if process.executableURL?.path != "/usr/bin/env" {
+        if process.executableURL?.path(percentEncoded: false) != "/usr/bin/env" {
             process.arguments = arguments
         }
 

@@ -20,14 +20,19 @@ struct EntryPoint {
             return (upstreamRaw, 1976)
         }()
 
+        let osVersion = ProcessInfo.processInfo.operatingSystemVersion
+        if osVersion.majorVersion < 27 || (osVersion.majorVersion == 27 && osVersion.minorVersion < 2) {
+            fputs("[WARN] apple-fm-audit requires macOS 27.2 or higher for full Apple Foundation Models compatibility (detected: \(osVersion.majorVersion).\(osVersion.minorVersion).\(osVersion.patchVersion)).\n", stderr)
+        }
+
         let rootDir = FileManager.default.currentDirectoryPath
-        let defaultDb = URL(fileURLWithPath: rootDir).appendingPathComponent("data/audit.sqlite").path
+        let defaultDb = URL(filePath: rootDir).appendingPathComponent("data/audit.sqlite").path(percentEncoded: false)
         let dbPath = env["AFM_DB"] ?? defaultDb
 
-        let dbDir = URL(fileURLWithPath: dbPath).deletingLastPathComponent().path
+        let dbDir = URL(filePath: dbPath).deletingLastPathComponent().path(percentEncoded: false)
         try FileManager.default.createDirectory(atPath: dbDir, withIntermediateDirectories: true)
 
-        let defaultStatic = URL(fileURLWithPath: rootDir).appendingPathComponent("static").path
+        let defaultStatic = URL(filePath: rootDir).appendingPathComponent("static").path(percentEncoded: false)
         let staticDir = env["AFM_STATIC_DIR"] ?? defaultStatic
 
         let store = try Store(path: dbPath)

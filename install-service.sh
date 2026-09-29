@@ -22,9 +22,11 @@ GUI="gui/${UID_NUM}"
 AGENTS="${HOME}/Library/LaunchAgents"
 LOGS="${HOME}/Library/Logs"
 FM="$(command -v fm || echo '/usr/bin/fm')"
+SW_VER="$(sw_vers -productVersion 2>/dev/null || echo '0.0')"
+echo "Detected macOS ${SW_VER}"
 
 if [ ! -x "${FM}" ]; then
-  echo "fm is required (/usr/bin/fm on macOS 27)." >&2
+  echo "fm is required (/usr/bin/fm on macOS 27.2)." >&2
   exit 1
 fi
 

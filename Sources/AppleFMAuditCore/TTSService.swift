@@ -219,7 +219,7 @@ public final class TTSService: Sendable {
                     }
 
                     // Write Base WAV file with explicit inner scope to guarantee RIFF header finalization
-                    let tempWavURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    let tempWavURL = URL(filePath: NSTemporaryDirectory())
                         .appendingPathComponent("afm_tts_\(UUID().uuidString).wav")
                     defer {
                         try? FileManager.default.removeItem(at: tempWavURL)
@@ -254,15 +254,15 @@ public final class TTSService: Sendable {
                         }
                     }()
 
-                    let tempOutURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    let tempOutURL = URL(filePath: NSTemporaryDirectory())
                         .appendingPathComponent("afm_tts_\(UUID().uuidString).\(ext)")
                     defer {
                         try? FileManager.default.removeItem(at: tempOutURL)
                     }
 
                     let proc = Process()
-                    proc.executableURL = URL(fileURLWithPath: "/usr/bin/afconvert")
-                    proc.arguments = ["-f", fFormat, "-d", dFormat, tempWavURL.path, tempOutURL.path]
+                    proc.executableURL = URL(filePath: "/usr/bin/afconvert")
+                    proc.arguments = ["-f", fFormat, "-d", dFormat, tempWavURL.path(percentEncoded: false), tempOutURL.path(percentEncoded: false)]
                     try proc.run()
                     proc.waitUntilExit()
 

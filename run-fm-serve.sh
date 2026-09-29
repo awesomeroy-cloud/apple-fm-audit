@@ -40,7 +40,20 @@ if [ -z "${PID}" ]; then
     end tell
   end run' "${FM}" "${HOST}" "${PORT}" 2>/dev/null || true)"
 
-  for _ in $(seq 1 50); do
+  for _ in $(seq 1 30); do
+    PID="$(get_pid || true)"
+    if [ -n "${PID}" ]; then
+      break
+    fi
+    sleep 0.2
+  done
+fi
+
+if [ -z "${PID}" ]; then
+  echo "Terminal launch failed or unavailable, starting fm serve directly..."
+  "${FM}" serve --host "${HOST}" --port "${PORT}" &
+  DIRECT_PID="$!"
+  for _ in $(seq 1 30); do
     PID="$(get_pid || true)"
     if [ -n "${PID}" ]; then
       break

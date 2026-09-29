@@ -41,9 +41,10 @@ public struct AuditRoutes: Sendable {
     }
 
     private func serveFile(filename: String, contentType: String) -> Response {
-        let path = URL(fileURLWithPath: staticDir).appendingPathComponent(filename).path
+        let fileURL = URL(filePath: staticDir).appendingPathComponent(filename)
+        let path = fileURL.path(percentEncoded: false)
         guard FileManager.default.fileExists(atPath: path),
-              let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+              let data = try? Data(contentsOf: fileURL) else {
             let err = "{\"error\":\"missing static file\"}"
             return Response(
                 status: .notFound,

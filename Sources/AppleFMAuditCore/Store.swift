@@ -24,7 +24,7 @@ public actor Store {
     public init(path: String) throws {
         self.path = path
         if path != ":memory:" {
-            let dir = URL(fileURLWithPath: path).deletingLastPathComponent()
+            let dir = URL(filePath: path).deletingLastPathComponent()
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
 
