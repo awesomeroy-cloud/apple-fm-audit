@@ -13,6 +13,17 @@ struct ConvertTests {
         #expect(!Convert.isResponsesPath("/v1/models"))
     }
 
+    @Test("rewriteUpstream injects stream=false when omitted in chat completions")
+    func testRewriteUpstreamChatCompletionsDefaultStream() {
+        let inputData = Data("{\"model\":\"pcc\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}".utf8)
+        let rewritten = Convert.rewriteUpstream(path: "/v1/chat/completions", body: inputData)
+        #expect(rewritten.path == "/v1/chat/completions")
+        #expect(rewritten.isResponses == false)
+        let json = (try? JSONSerialization.jsonObject(with: rewritten.body)) as? [String: Any]
+        #expect((json?["stream"] as? Bool) == false)
+        #expect((json?["model"] as? String) == "pcc")
+    }
+
     @Test("toChatRequest normalizes roles and flattens input")
     func testToChatRequest() {
         let payload: [String: Any] = [

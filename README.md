@@ -58,6 +58,21 @@ Logs: `~/Library/Logs/org.apple-fm-audit.fm-serve.log` and `~/Library/Logs/org.a
 
 ## Apple Shortcuts (快捷指令)
 
+### Recommended Community Shortcut (ChatGPT-Siri 1.3.1)
+
+For cross-device support across iPhone, iPad, Mac, and hands-free Siri voice queries with continuous conversation and custom OpenAI-compatible API URLs:
+- **iCloud Import Links**:
+  - [智能聊天 1.3.1 (Simplified Chinese)](https://www.icloud.com/shortcuts/304a6c3e61a74c2a8ad3ea6a8a66f79c)
+  - [Smart Chat 1.3.1 (English)](https://www.icloud.com/shortcuts/22440fa8e635430db21619bd9bc4e299)
+- **Generic Configuration**:
+  - **API URL**:
+    - LAN: `http://<this-mac-lan-ip>:1977/v1/chat/completions`
+    - Remote / Cloudflare Tunnel: `https://<your-tunnel-domain>/v1/chat/completions`
+  - **API Key**: `sk-local` (or any non-empty placeholder string)
+  - **Model**: `system` (On-device NPU) or `pcc` (Private Cloud Compute)
+
+### Pre-built Repository Shortcuts
+
 Pre-built and signed `.shortcut` files are provided in [`shortcuts/`](shortcuts/):
 - **AFM 智能问答**: Interactive dialog prompt with clipboard copy and dialog output.
 - **AFM 划词总结**: macOS Quick Action / Services menu for summarizing or polishing selected text.

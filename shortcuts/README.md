@@ -1,6 +1,21 @@
 # 快捷指令 (Apple Shortcuts) 接入指南
 
-本目录包含为 `apple-fm-audit` 服务预生成的 macOS / iOS 快捷指令文件及构建脚本。
+本目录包含为 `apple-fm-audit` 服务预生成的 macOS / iOS 快捷指令说明及社区开源快捷指令接入方案。
+
+---
+
+## 推荐开源通用快捷指令 (ChatGPT-Siri 1.3.1)
+
+适合 iPhone、iPad、Mac 跨设备与 Siri 语音联动，支持自定义 OpenAI API 端点与上下文多轮对话：
+- **iCloud 安装链接**：
+  - [智能聊天 1.3.1 (简体中文版)](https://www.icloud.com/shortcuts/304a6c3e61a74c2a8ad3ea6a8a66f79c)
+  - [Smart Chat 1.3.1 (English Version)](https://www.icloud.com/shortcuts/22440fa8e635430db21619bd9bc4e299)
+- **通用配置参数**：
+  - **API URL**：
+    - 局域网访问：`http://<this-mac-lan-ip>:1977/v1/chat/completions`
+    - 外网访问（Cloudflare Tunnel）：`https://<your-tunnel-domain>/v1/chat/completions`
+  - **API Key**：`sk-local`（或任意非空占位字符串）
+  - **Model**：`system`（本机 NPU 推理）或 `pcc`（Apple 私有云计算）
 
 ---
 
@@ -53,10 +68,10 @@ open "shortcuts/AFM 极速问答 (Shell).shortcut"
    ```
 
 ### 公网 / Cloudflare Tunnel
-若配置了 Cloudflare Tunnel 域名（如 `https://cpmmw.53116091.xyz`）：
+若配置了 Cloudflare Tunnel 域名（如 `https://<your-tunnel-domain>`）：
 1. 将 URL 修改为：
    ```
-   https://cpmmw.53116091.xyz/v1/chat/completions
+   https://<your-tunnel-domain>/v1/chat/completions
    ```
 2. iPhone 无论在蜂窝网络还是外网环境，均可直接调用家中/办公室 Mac 的 Apple Foundation Model。
 
