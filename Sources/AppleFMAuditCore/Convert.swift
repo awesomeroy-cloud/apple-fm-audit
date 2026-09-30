@@ -26,16 +26,30 @@ public enum Convert {
         return clean == "/responses" || clean == "/v1/responses"
     }
 
+    public static func isChatPath(_ path: String) -> Bool {
+        let clean = path.components(separatedBy: "?").first ?? path
+        return clean == "/chat/completions" || clean == "/v1/chat/completions"
+    }
+
     public static func rewriteUpstream(path: String, body: Data) -> (path: String, body: Data, isResponses: Bool) {
-        guard isResponsesPath(path) else {
-            return (path, body, false)
+        if isResponsesPath(path) {
+            guard !body.isEmpty, let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+                return ("/v1/chat/completions", body, true)
+            }
+            let chatReq = toChatRequest(payload: json)
+            let outData = (try? JSONSerialization.data(withJSONObject: chatReq, options: [.fragmentsAllowed])) ?? body
+            return ("/v1/chat/completions", outData, true)
         }
-        guard !body.isEmpty, let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
-            return ("/v1/chat/completions", body, true)
+
+        if isChatPath(path), !body.isEmpty, var json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+            if json["stream"] == nil {
+                json["stream"] = false
+                let outData = (try? JSONSerialization.data(withJSONObject: json, options: [.fragmentsAllowed])) ?? body
+                return (path, outData, false)
+            }
         }
-        let chatReq = toChatRequest(payload: json)
-        let outData = (try? JSONSerialization.data(withJSONObject: chatReq, options: [.fragmentsAllowed])) ?? body
-        return ("/v1/chat/completions", outData, true)
+
+        return (path, body, false)
     }
 
     public static func toChatRequest(payload: [String: Any]) -> [String: Any] {

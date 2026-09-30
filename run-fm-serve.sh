@@ -23,20 +23,32 @@ get_pid() {
 PID="$(get_pid || true)"
 WIN_ID=""
 
-if [ -z "${PID}" ]; then
-  open -a /System/Applications/Utilities/Terminal.app 2>/dev/null || true
-  WIN_ID="$(osascript -e '
+start_in_terminal() {
+  osascript -e '
   on run argv
     set fmCmd to item 1 of argv
     set hostArg to item 2 of argv
     set portArg to item 3 of argv
-    tell application id "com.apple.Terminal"
+    tell application "Terminal"
       set newTab to do script "exec \"" & fmCmd & "\" serve --host " & hostArg & " --port " & portArg
       set w to first window whose tabs contains newTab
       set visible of w to false
       return (id of w as string)
     end tell
-  end run' "${FM}" "${HOST}" "${PORT}" 2>/dev/null || true)"
+  end run' "${FM}" "${HOST}" "${PORT}" 2>/dev/null || true
+}
+
+if [ -z "${PID}" ]; then
+  open -a /System/Applications/Utilities/Terminal.app 2>/dev/null || true
+  WIN_ID="$(start_in_terminal)"
+
+  if [ -z "${WIN_ID}" ]; then
+    killall Terminal 2>/dev/null || true
+    sleep 0.5
+    open -a /System/Applications/Utilities/Terminal.app 2>/dev/null || true
+    sleep 0.5
+    WIN_ID="$(start_in_terminal)"
+  fi
 
   for _ in $(seq 1 50); do
     PID="$(get_pid || true)"
