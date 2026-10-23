@@ -106,6 +106,9 @@ public struct CallDetail: Sendable, Codable {
 public enum Annotate {
     public static func classifyIssue(status: Int?, resBody: String?, error: String?) -> (id: String, label: String) {
         let text = "\(resBody ?? "") \(error ?? "")".lowercased()
+        if text.contains("insufficient_quota") || text.contains("quota has been reached") || text.contains("rate_limit_exceeded") {
+            return ("quota", "quota")
+        }
         if text.contains("cross-site") || text.contains("csrf") {
             return ("csrf", "csrf")
         }

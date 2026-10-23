@@ -161,6 +161,24 @@ public struct AuditRoutes: Sendable {
             }
         }
 
+        // Overlay dynamic tracker state if upstream /health cached quota is stale
+        var dynamicState = await PCCQuotaTracker.shared.state()
+        if !dynamicState.limitReached {
+            // Also inspect latest calls from store to seed state after restart
+            let recentCalls = (try? await store.listCalls(pathContains: nil, limit: 5)) ?? []
+            if let latestCall = recentCalls.first, latestCall.status == 429 || latestCall.issue == "quota" {
+                await PCCQuotaTracker.shared.markLimitReached()
+                dynamicState = await PCCQuotaTracker.shared.state()
+            }
+        }
+        if dynamicState.limitReached {
+            pccQuota["limit_reached"] = true
+            pccQuota["status"] = "limit_reached"
+            if !dynamicState.reason.isEmpty {
+                pccQuota["reason"] = dynamicState.reason
+            }
+        }
+
         let resp: [String: Any] = [
             "system": [
                 "name": "system",

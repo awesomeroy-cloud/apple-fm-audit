@@ -125,4 +125,39 @@ struct ConvertTests {
         #expect(framesDone[1].contains("\"created_at\":"))
         #expect(state.completed)
     }
+
+    @Test("rewriteUpstream strips response_format when type is json_object")
+    func testRewriteUpstreamStripsJsonObject() {
+        let input = """
+        {
+          "model": "pcc",
+          "messages": [{"role": "user", "content": "return json"}],
+          "response_format": {"type": "json_object"}
+        }
+        """
+        let rewritten = Convert.rewriteUpstream(path: "/v1/chat/completions", body: Data(input.utf8))
+        let json = (try? JSONSerialization.jsonObject(with: rewritten.body)) as? [String: Any]
+        #expect(json?["response_format"] == nil)
+        #expect((json?["stream"] as? Bool) == false)
+        #expect((json?["model"] as? String) == "pcc")
+    }
+
+    @Test("rewriteUpstream preserves response_format when type is json_schema")
+    func testRewriteUpstreamPreservesJsonSchema() {
+        let input = """
+        {
+          "model": "pcc",
+          "messages": [{"role": "user", "content": "return structured"}],
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "test", "schema": {"type": "object"}}
+          }
+        }
+        """
+        let rewritten = Convert.rewriteUpstream(path: "/v1/chat/completions", body: Data(input.utf8))
+        let json = (try? JSONSerialization.jsonObject(with: rewritten.body)) as? [String: Any]
+        let rf = json?["response_format"] as? [String: Any]
+        #expect(rf != nil)
+        #expect((rf?["type"] as? String) == "json_schema")
+    }
 }

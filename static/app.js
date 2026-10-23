@@ -9,6 +9,9 @@ const dSub = document.getElementById("d-sub");
 const dUsage = document.getElementById("d-usage");
 const dReq = document.getElementById("d-req");
 const dRes = document.getElementById("d-res");
+const sectionReply = document.getElementById("section-reply");
+const dReply = document.getElementById("d-reply");
+const detailsRes = document.getElementById("details-res");
 
 let selected = null;
 let timer = null;
@@ -39,6 +42,57 @@ function pretty(text) {
   } catch {
     return text;
   }
+}
+
+function extractReplyContent(resBody) {
+  if (!resBody || typeof resBody !== "string") return null;
+  const trimmed = resBody.trim();
+  if (!trimmed) return null;
+
+  // Case 1: SSE stream (data: ...)
+  if (trimmed.startsWith("data:") || trimmed.includes("\ndata:")) {
+    let combined = "";
+    const lines = trimmed.split("\n");
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const json = JSON.parse(payload);
+        if (json.choices && Array.isArray(json.choices)) {
+          for (const choice of json.choices) {
+            if (choice.delta && typeof choice.delta.content === "string") {
+              combined += choice.delta.content;
+            } else if (choice.message && typeof choice.message.content === "string") {
+              combined += choice.message.content;
+            }
+          }
+        }
+      } catch {
+        // ignore incomplete or non-JSON chunk
+      }
+    }
+    return combined.length > 0 ? combined : null;
+  }
+
+  // Case 2: standard JSON response
+  try {
+    const json = JSON.parse(trimmed);
+    if (json.choices && Array.isArray(json.choices) && json.choices.length > 0) {
+      const choice = json.choices[0];
+      if (choice.message && typeof choice.message.content === "string") {
+        return choice.message.content;
+      }
+      if (typeof choice.text === "string") {
+        return choice.text;
+      }
+    }
+  } catch {
+    // not JSON
+  }
+
+  return null;
 }
 
 function headersBlock(raw) {
@@ -177,6 +231,17 @@ async function openCall(id) {
   const reqHead = headersBlock(call.req_headers);
   const resHead = headersBlock(call.res_headers);
   dReq.textContent = [reqHead, pretty(call.req_body)].filter(Boolean).join("\n\n");
+
+  const replyText = extractReplyContent(call.res_body);
+  if (replyText) {
+    sectionReply.hidden = false;
+    dReply.textContent = replyText;
+  } else {
+    sectionReply.hidden = true;
+    dReply.textContent = "";
+  }
+
+  detailsRes.open = false;
   dRes.textContent = [resHead, pretty(call.res_body)].filter(Boolean).join("\n\n");
   await loadList();
 }

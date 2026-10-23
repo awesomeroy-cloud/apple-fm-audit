@@ -89,3 +89,27 @@ public enum PCC {
         return (try? JSONSerialization.data(withJSONObject: json, options: [.fragmentsAllowed])) ?? body
     }
 }
+
+public actor PCCQuotaTracker {
+    public static let shared = PCCQuotaTracker()
+
+    private var limitReached: Bool = false
+    private var limitReason: String = ""
+    private var lastUpdated: Date? = nil
+
+    public func markLimitReached(reason: String = "Your quota has been reached. Please try again later.") {
+        self.limitReached = true
+        self.limitReason = reason
+        self.lastUpdated = Date()
+    }
+
+    public func markSuccess() {
+        self.limitReached = false
+        self.limitReason = ""
+        self.lastUpdated = Date()
+    }
+
+    public func state() -> (limitReached: Bool, reason: String, lastUpdated: Date?) {
+        return (self.limitReached, self.limitReason, self.lastUpdated)
+    }
+}

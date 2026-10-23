@@ -36,20 +36,39 @@ public enum Convert {
             guard !body.isEmpty, let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
                 return ("/v1/chat/completions", body, true)
             }
-            let chatReq = toChatRequest(payload: json)
+            var chatReq = toChatRequest(payload: json)
+            stripJsonObjectResponseFormat(in: &chatReq)
             let outData = (try? JSONSerialization.data(withJSONObject: chatReq, options: [.fragmentsAllowed])) ?? body
             return ("/v1/chat/completions", outData, true)
         }
 
         if isChatPath(path), !body.isEmpty, var json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+            var changed = false
             if json["stream"] == nil {
                 json["stream"] = false
+                changed = true
+            }
+            if stripJsonObjectResponseFormat(in: &json) {
+                changed = true
+            }
+            if changed {
                 let outData = (try? JSONSerialization.data(withJSONObject: json, options: [.fragmentsAllowed])) ?? body
                 return (path, outData, false)
             }
         }
 
         return (path, body, false)
+    }
+
+    @discardableResult
+    private static func stripJsonObjectResponseFormat(in json: inout [String: Any]) -> Bool {
+        guard let rf = json["response_format"] as? [String: Any],
+              let type = rf["type"] as? String,
+              type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "json_object" else {
+            return false
+        }
+        json.removeValue(forKey: "response_format")
+        return true
     }
 
     public static func toChatRequest(payload: [String: Any]) -> [String: Any] {

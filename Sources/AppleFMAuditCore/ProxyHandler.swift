@@ -181,6 +181,7 @@ public struct ProxyHandler: Sendable {
             let captureFinalResHeaders = finalResHeaders
             let captureInitialError = errorNote
             let captureUpstreamStatus = upstreamStatus
+            let captureUsedModel = usedModel
 
             let responseBody = ResponseBody(contentLength: nil) { writer in
                 var accData = Data()
@@ -236,17 +237,42 @@ public struct ProxyHandler: Sendable {
                 let durationMs = Int((ContinuousClock.now - startClock) / .milliseconds(1))
                 let reqJson = (try? JSONSerialization.data(withJSONObject: reqHeadersMap)) ?? Data()
                 let resJson = (try? JSONSerialization.data(withJSONObject: captureFinalResHeaders)) ?? Data()
+                let resBodyStr = String(data: accData, encoding: .utf8) ?? ""
+
+                var effectiveStatus = captureUpstreamStatus
+                var effectiveError = currentError
+                let lowerBody = resBodyStr.lowercased()
+
+                if lowerBody.contains("insufficient_quota") || lowerBody.contains("quota has been reached") || lowerBody.contains("code\":\"429\"") {
+                    effectiveStatus = 429
+                    if effectiveError == nil {
+                        effectiveError = "insufficient_quota: quota reached"
+                    }
+                    await PCCQuotaTracker.shared.markLimitReached()
+                } else if lowerBody.contains("context size") || lowerBody.contains("contextwindow") || lowerBody.contains("context window") {
+                    effectiveStatus = 500
+                    if effectiveError == nil {
+                        effectiveError = "context size exceeded"
+                    }
+                } else if lowerBody.contains("event: error") {
+                    if effectiveStatus == 200 {
+                        effectiveStatus = 500
+                    }
+                } else if captureUsedModel == "pcc" && captureUpstreamStatus == 200 {
+                    await PCCQuotaTracker.shared.markSuccess()
+                }
+
                 _ = try? await storeRef.insert(
                     method: reqMethod,
                     path: reqUriPath,
                     query: query,
-                    status: captureUpstreamStatus,
+                    status: effectiveStatus,
                     durationMs: durationMs,
                     reqHeaders: String(data: reqJson, encoding: .utf8) ?? "{}",
                     reqBody: String(data: captureReqBodyData, encoding: .utf8) ?? "",
                     resHeaders: String(data: resJson, encoding: .utf8) ?? "{}",
-                    resBody: String(data: accData, encoding: .utf8) ?? "",
-                    error: currentError
+                    resBody: resBodyStr,
+                    error: effectiveError
                 )
             }
 
@@ -278,16 +304,27 @@ public struct ProxyHandler: Sendable {
             let durationMs = Int((ContinuousClock.now - startClock) / .milliseconds(1))
             let reqJson = (try? JSONSerialization.data(withJSONObject: reqHeadersMap)) ?? Data()
             let resJson = (try? JSONSerialization.data(withJSONObject: finalResHeaders)) ?? Data()
+            let resBodyStr = String(data: resData, encoding: .utf8) ?? ""
+
+            var effectiveStatus = upstreamStatus
+            let lowerBody = resBodyStr.lowercased()
+            if lowerBody.contains("insufficient_quota") || lowerBody.contains("quota has been reached") || lowerBody.contains("code\":\"429\"") {
+                effectiveStatus = 429
+                await PCCQuotaTracker.shared.markLimitReached()
+            } else if usedModel == "pcc" && upstreamStatus == 200 {
+                await PCCQuotaTracker.shared.markSuccess()
+            }
+
             _ = try? await storeRef.insert(
                 method: reqMethod,
                 path: reqUriPath,
                 query: query,
-                status: upstreamStatus,
+                status: effectiveStatus,
                 durationMs: durationMs,
                 reqHeaders: String(data: reqJson, encoding: .utf8) ?? "{}",
                 reqBody: String(data: reqBodyData, encoding: .utf8) ?? "",
                 resHeaders: String(data: resJson, encoding: .utf8) ?? "{}",
-                resBody: String(data: resData, encoding: .utf8) ?? "",
+                resBody: resBodyStr,
                 error: errorNote
             )
 

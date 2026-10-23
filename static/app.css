@@ -344,6 +344,36 @@ input:focus-visible,
   word-break: break-word;
 }
 
+.d-reply {
+  padding: 0.85rem 0.9rem;
+  background: #f7f8f9;
+  border-left: 4px solid var(--ok);
+  font-family: var(--type);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+}
+
+.slab-details {
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}
+
+.slab-summary {
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+  user-select: none;
+  color: var(--ink);
+}
+
+.slab-summary:hover {
+  color: var(--oxide);
+}
+
 @media (max-width: 800px) {
   .top { flex-direction: column; align-items: flex-start; }
   .bench { grid-template-columns: 1fr; }
