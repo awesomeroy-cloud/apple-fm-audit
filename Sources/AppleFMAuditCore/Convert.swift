@@ -31,13 +31,38 @@ public enum Convert {
         return clean == "/chat/completions" || clean == "/v1/chat/completions"
     }
 
-    public static func rewriteUpstream(path: String, body: Data) -> (path: String, body: Data, isResponses: Bool) {
+    public static func isWorkBuddy(headers: [String: String]) -> Bool {
+        for (k, v) in headers {
+            let lk = k.lowercased()
+            if lk == "user-agent" && v.localizedCaseInsensitiveContains("workbuddy") {
+                return true
+            }
+            if (lk == "x-ide-type" || lk == "x-ide-name") && v.localizedCaseInsensitiveContains("workbuddy") {
+                return true
+            }
+            if lk == "x-codebuddy-request" {
+                return true
+            }
+            if lk == "x-domain" && v.localizedCaseInsensitiveContains("workbuddy") {
+                return true
+            }
+        }
+        return false
+    }
+
+    public static func rewriteUpstream(
+        path: String,
+        body: Data,
+        headers: [String: String]? = nil
+    ) -> (path: String, body: Data, isResponses: Bool) {
         if isResponsesPath(path) {
             guard !body.isEmpty, let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
                 return ("/v1/chat/completions", body, true)
             }
             var chatReq = toChatRequest(payload: json)
             stripJsonObjectResponseFormat(in: &chatReq)
+            sanitizeReasoningEffort(in: &chatReq)
+            sanitizeToolsSchema(in: &chatReq)
             let outData = (try? JSONSerialization.data(withJSONObject: chatReq, options: [.fragmentsAllowed])) ?? body
             return ("/v1/chat/completions", outData, true)
         }
@@ -51,6 +76,12 @@ public enum Convert {
             if stripJsonObjectResponseFormat(in: &json) {
                 changed = true
             }
+            if sanitizeReasoningEffort(in: &json) {
+                changed = true
+            }
+            if sanitizeToolsSchema(in: &json) {
+                changed = true
+            }
             if changed {
                 let outData = (try? JSONSerialization.data(withJSONObject: json, options: [.fragmentsAllowed])) ?? body
                 return (path, outData, false)
@@ -58,6 +89,117 @@ public enum Convert {
         }
 
         return (path, body, false)
+    }
+
+    @discardableResult
+    public static func sanitizeReasoningEffort(in json: inout [String: Any]) -> Bool {
+        guard let raw = json["reasoning_effort"] else {
+            return false
+        }
+        guard let effort = raw as? String else {
+            json.removeValue(forKey: "reasoning_effort")
+            return true
+        }
+        let clean = effort.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if clean == "none" || (clean != "low" && clean != "medium" && clean != "high") {
+            json.removeValue(forKey: "reasoning_effort")
+            return true
+        }
+        if let model = json["model"] as? String, !PCC.isPCCModel(model) {
+            json.removeValue(forKey: "reasoning_effort")
+            return true
+        }
+        return false
+    }
+
+    @discardableResult
+    public static func sanitizeToolsSchema(in json: inout [String: Any]) -> Bool {
+        guard let tools = json["tools"] as? [Any] else {
+            return false
+        }
+        var changed = false
+        var newTools: [Any] = []
+        for tool in tools {
+            if var toolDict = tool as? [String: Any] {
+                if var fn = toolDict["function"] as? [String: Any] {
+                    if let params = fn["parameters"] as? [String: Any] {
+                        var pCopy = params
+                        if sanitizeSchemaNode(&pCopy) {
+                            changed = true
+                        }
+                        fn["parameters"] = pCopy
+                        toolDict["function"] = fn
+                    }
+                }
+                newTools.append(toolDict)
+            } else {
+                newTools.append(tool)
+            }
+        }
+        if changed {
+            json["tools"] = newTools
+        }
+        return changed
+    }
+
+    @discardableResult
+    public static func sanitizeSchemaNode(_ node: inout [String: Any]) -> Bool {
+        var changed = false
+
+        if node["type"] == nil {
+            let union = (node["anyOf"] as? [Any]) ?? (node["oneOf"] as? [Any])
+            if let union, !union.isEmpty {
+                for item in union {
+                    if let dict = item as? [String: Any], let t = dict["type"] as? String {
+                        node["type"] = t
+                        if let items = dict["items"] {
+                            node["items"] = items
+                        }
+                        changed = true
+                        break
+                    }
+                }
+                if node["type"] == nil {
+                    node["type"] = "string"
+                    changed = true
+                }
+            }
+        }
+
+        if node.removeValue(forKey: "anyOf") != nil { changed = true }
+        if node.removeValue(forKey: "oneOf") != nil { changed = true }
+        if node.removeValue(forKey: "pattern") != nil { changed = true }
+
+        if let addProp = node["additionalProperties"] {
+            if addProp is [String: Any] || addProp is [Any] {
+                node["additionalProperties"] = true
+                changed = true
+            }
+        }
+
+        if let props = node["properties"] as? [String: Any] {
+            var newProps: [String: Any] = [:]
+            for (propName, propVal) in props {
+                if var propDict = propVal as? [String: Any] {
+                    if sanitizeSchemaNode(&propDict) {
+                        changed = true
+                    }
+                    newProps[propName] = propDict
+                } else {
+                    newProps[propName] = propVal
+                }
+            }
+            node["properties"] = newProps
+        }
+
+        if var itemsDict = node["items"] as? [String: Any] {
+            if sanitizeSchemaNode(&itemsDict) {
+                changed = true
+            }
+            node["items"] = itemsDict
+        }
+
+        return changed
     }
 
     @discardableResult

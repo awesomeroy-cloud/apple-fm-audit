@@ -160,4 +160,148 @@ struct ConvertTests {
         #expect(rf != nil)
         #expect((rf?["type"] as? String) == "json_schema")
     }
+
+    @Test("WorkBuddy client detection")
+    func testWorkBuddyDetection() {
+        #expect(Convert.isWorkBuddy(headers: ["User-Agent": "WorkBuddy/5.9.3 CLI/2.165.0"]))
+        #expect(Convert.isWorkBuddy(headers: ["X-IDE-Type": "WorkBuddy"]))
+        #expect(Convert.isWorkBuddy(headers: ["X-IDE-Name": "WorkBuddy"]))
+        #expect(Convert.isWorkBuddy(headers: ["x-codebuddy-request": "1"]))
+        #expect(Convert.isWorkBuddy(headers: ["X-Domain": "www.workbuddy.cn"]))
+        #expect(!Convert.isWorkBuddy(headers: ["User-Agent": "curl/8.7.1"]))
+    }
+
+    @Test("Sanitize reasoning_effort removes none and non-PCC efforts")
+    func testSanitizeReasoningEffort() {
+        var pccNone: [String: Any] = ["model": "pcc", "reasoning_effort": "none"]
+        #expect(Convert.sanitizeReasoningEffort(in: &pccNone) == true)
+        #expect(pccNone["reasoning_effort"] == nil)
+
+        var pccValid: [String: Any] = ["model": "pcc", "reasoning_effort": "medium"]
+        #expect(Convert.sanitizeReasoningEffort(in: &pccValid) == false)
+        #expect((pccValid["reasoning_effort"] as? String) == "medium")
+
+        var sysWithEffort: [String: Any] = ["model": "system", "reasoning_effort": "low"]
+        #expect(Convert.sanitizeReasoningEffort(in: &sysWithEffort) == true)
+        #expect(sysWithEffort["reasoning_effort"] == nil)
+    }
+
+    @Test("Sanitize tools schema rewrites additionalProperties, anyOf, and pattern")
+    func testSanitizeToolsSchema() {
+        var payload: [String: Any] = [
+            "model": "pcc",
+            "messages": [["role": "user", "content": "hi"]],
+            "tools": [
+                [
+                    "type": "function",
+                    "function": [
+                        "name": "TaskCreate",
+                        "parameters": [
+                            "type": "object",
+                            "properties": [
+                                "metadata": [
+                                    "type": "object",
+                                    "additionalProperties": [:]
+                                ]
+                            ]
+                        ]
+                    ]
+                ],
+                [
+                    "type": "function",
+                    "function": [
+                        "name": "widget_guidelines",
+                        "parameters": [
+                            "type": "object",
+                            "properties": [
+                                "modules": [
+                                    "anyOf": [
+                                        ["type": "array", "items": ["type": "string"]],
+                                        ["type": "string"]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ],
+                [
+                    "type": "function",
+                    "function": [
+                        "name": "WebSearch",
+                        "parameters": [
+                            "type": "object",
+                            "properties": [
+                                "query": ["type": "string"],
+                                "freshness": [
+                                    "type": "string",
+                                    "pattern": "^(?:d30)$"
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+        let changed = Convert.sanitizeToolsSchema(in: &payload)
+        #expect(changed == true)
+
+        let tools = (payload["tools"] as? [[String: Any]]) ?? []
+        #expect(tools.count == 3)
+
+        // TaskCreate metadata.additionalProperties -> true
+        let t1Params = (tools[0]["function"] as? [String: Any])?["parameters"] as? [String: Any]
+        let metaProp = (t1Params?["properties"] as? [String: Any])?["metadata"] as? [String: Any]
+        #expect((metaProp?["additionalProperties"] as? Bool) == true)
+
+        // widget_guidelines modules anyOf -> flattened to array
+        let t2Params = (tools[1]["function"] as? [String: Any])?["parameters"] as? [String: Any]
+        let modulesProp = (t2Params?["properties"] as? [String: Any])?["modules"] as? [String: Any]
+        #expect((modulesProp?["type"] as? String) == "array")
+        #expect(modulesProp?["anyOf"] == nil)
+
+        // WebSearch freshness pattern stripped
+        let t3Params = (tools[2]["function"] as? [String: Any])?["parameters"] as? [String: Any]
+        let freshnessProp = (t3Params?["properties"] as? [String: Any])?["freshness"] as? [String: Any]
+        #expect((freshnessProp?["type"] as? String) == "string")
+        #expect(freshnessProp?["pattern"] == nil)
+    }
+
+    @Test("rewriteUpstream normalizes WorkBuddy requests end to end")
+    func testRewriteUpstreamWorkBuddyPayload() {
+        let input = """
+        {
+          "model": "system",
+          "reasoning_effort": "none",
+          "messages": [{"role": "user", "content": "hello"}],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "TaskCreate",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+        """
+        let headers = ["User-Agent": "WorkBuddy/5.9.3", "X-IDE-Type": "WorkBuddy"]
+        let rewritten = Convert.rewriteUpstream(path: "/v1/chat/completions", body: Data(input.utf8), headers: headers)
+        let json = (try? JSONSerialization.jsonObject(with: rewritten.body)) as? [String: Any]
+
+        #expect(json?["reasoning_effort"] == nil)
+        #expect((json?["stream"] as? Bool) == false)
+        let tools = (json?["tools"] as? [[String: Any]]) ?? []
+        let params = (tools[0]["function"] as? [String: Any])?["parameters"] as? [String: Any]
+        let meta = (params?["properties"] as? [String: Any])?["metadata"] as? [String: Any]
+        #expect((meta?["additionalProperties"] as? Bool) == true)
+    }
 }

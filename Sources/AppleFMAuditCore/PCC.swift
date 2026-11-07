@@ -86,6 +86,9 @@ public enum PCC {
             return body
         }
         json["model"] = model
+        if !isPCCModel(model) {
+            json.removeValue(forKey: "reasoning_effort")
+        }
         return (try? JSONSerialization.data(withJSONObject: json, options: [.fragmentsAllowed])) ?? body
     }
 }

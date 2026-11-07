@@ -40,7 +40,11 @@ public struct ProxyHandler: Sendable {
 
         let rawPath = request.uri.path
         let query = request.uri.query ?? ""
-        var (fwdPath, fwdBody, asResponses) = Convert.rewriteUpstream(path: rawPath, body: reqBodyData)
+        var clientHeaders: [String: String] = [:]
+        for field in request.headers {
+            clientHeaders[field.name.rawName] = field.value
+        }
+        var (fwdPath, fwdBody, asResponses) = Convert.rewriteUpstream(path: rawPath, body: reqBodyData, headers: clientHeaders)
 
         let wantModel = PCC.requestedModel(body: fwdBody)
         var usedModel = wantModel ?? "system"
